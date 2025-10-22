@@ -1,5 +1,6 @@
 import Blog from "../models/Blog.js";
 import User from "../models/User.js";
+import { calculateBlogScore } from "../utils/feedAlgorithm.js";
 
 // @desc create a new blog
 // @route POST /api/blogs

@@ -16,13 +16,16 @@ export const calculateBlogScore = (blog, userInterests = []) => {
             if (blog.categories.includes(interest.category)) {
                 interestScore += interest.score;
             }
-            blog.tags.forEach(tag => {
-                if (interest.tags && interest.tags.includes(tag)) {
-                    interestScore += interest.score * 0.5;
-                }
-            });
+            if (blog.tags) {
+                
+                blog.tags.forEach(tag => {
+                    if (interest.tags && interest.tags.includes(tag)) {
+                        interestScore += interest.score * 0.5;
+                    }
+                });
+            }
         });
-        interestScore = (interestScore / userInterests/length) * 0.3;
+        interestScore = userInterests.length > 0 ? (interestScore / userInterests/length) * 0.3: 0;
     }
 
     return likesScore + recencyScore + interestScore;
