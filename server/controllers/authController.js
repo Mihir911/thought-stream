@@ -6,7 +6,7 @@ import { generateToken } from '../utils/generateToken.js';
 //@access public
 export const registerUser = async (req, res) => {
     try {
-        const { username, email, password } = req.body;
+        const { username, email, password, interests } = req.body;
         
         //check if user exist
         const existingUser = await User.findOne({
@@ -24,7 +24,8 @@ export const registerUser = async (req, res) => {
         const user = await User.create({
             username,
             email,
-            password
+            password,
+            interests: Array.isArray(interests) ? interests : []
         });
 
         if (user) {
