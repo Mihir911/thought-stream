@@ -1,6 +1,7 @@
 import Blog from "../models/Blog.js";
 import User from "../models/User.js";
 import { calculateBlogScore } from "../utils/feedAlgorithm.js";
+import { getTopSimilar, getTopSimilar } from "../utils/similarity.js";
 
 // @desc create a new blog
 // @route POST /api/blogs
@@ -432,7 +433,7 @@ export const getTrendingBlogs = async (req, res) => {
 // @access  Public
 export const getRelatedBlogs = async (req, res) => {
     try {
-        const blog = await Blog.findById(req.params.id);
+        const blog = await Blog.findById(req.params.id).lean();
         
         if (!blog) {
             return res.status(404).json({
@@ -440,25 +441,70 @@ export const getRelatedBlogs = async (req, res) => {
                 message: 'Blog not found'
             });
         }
-        
-        const relatedBlogs = await Blog.find({
+
+        // ---1) prefilter candidates to a reasonable set
+        // wider OR so we have enough candidates for similarity ranking
+        const candidates = await Blog.find({
             _id: { $ne: blog._id },
             isPublished: true,
             $or: [
-                { categories: { $in: blog.categories } },
-                { tags: { $in: blog.tags } },
+                { categories: { $in: blog.categories || [] } },
+                { tags: { $sin: blog.tags || [] } },
                 { author: blog.author }
             ]
         })
         .populate('author', 'username profilePicture')
-        .limit(6)
-        .sort({ likes: -1, createdAt: -1 });
-        
+        .limit(200) // tune this; larger = slower
+        .lean();
+
+        // if not enough candidates, fallback to recent popular post
+        if (candidates.length < 6) {
+            const fallback = await Blog.find({
+                _id: { $ne: blog._id },
+                isPublished: true
+            })
+            .populate('author', 'username profilePicture')
+            .sort({ likes: -1, createdAt: -1 })
+            .limit(20)
+            .lean();
+            //merge unique candidates
+            const ids = new Set(candidates.map(c => c._id.toString()));
+            fallback.forEach(f => {
+                if (!ids.has(f._id.toString())) candidates.push(f);
+            });
+        }
+
+        //----2) Builld minimal docs array (query first)
+        const docs = [
+            {
+            id: blog._id.toString(),
+            text: `${blog.title} ${blog,excerpt || ''} ${blog.content?.slice(0, 2000) || ''} ${(blog.tags || []).join(' ')}`
+            },
+            ...candidates.map(c => ({
+                id: c._id.toString(),
+                text: `${c.title} ${c.excerpt || ''} ${c.content?.slice(0, 2000) || ''} ${(c.tags || []).join(' ')}`,
+                meta: c
+            }))
+        ];
+
+        //---3) Rank by content similarity
+        const getTopSimilar = await getTopSimilar(docs, 6);
+
+        // map back to blog document (include similarity score)
+        const related = getTopSimilar.map(s => {
+            //s contains fields from candidate doc + similarity
+            const candidate = candidates.find(c => c._id.toString() === s.id);
+            return {
+                ...candidate,
+                similarity: s.similarity
+            };
+        });
+
         res.json({
             success: true,
-            relatedBlogs
+            relatedBlogs: related
         });
-        
+
     } catch (error) {
         console.error('Related blogs error:', error);
         res.status(500).json({
