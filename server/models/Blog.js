@@ -1,5 +1,37 @@
 import mongoose from "mongoose";
 
+const commentSchema = new mongoose.Schema({
+    user: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true
+    },
+    parent: { //allow threaded replies
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Blog.comments',
+        default: null
+    },
+    text: {
+        type: String,
+        required: true,
+        trim: true,
+        maxlength: 1000
+    },
+    createdAt: {
+        type: Date,
+        default: Date.now
+    },
+    upVotes: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+    }],
+    // last activity used for trending in comment thread
+    lastActivity: {
+        type: Date,
+        default: Date.now
+    }
+});
+
 const blogSchema = new mongoose.Schema({
     title: {
         type: String,
@@ -51,35 +83,23 @@ const blogSchema = new mongoose.Schema({
         ref: 'User'
     }],
 
-    comments: [{
-        user: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'User',
-            required: true
-        },
-        text: {
-            type: String,
-            required: true,
-            trim: true,
-            maxlength: 1000
-        },
-        createdAt: {
-            type: Date,
-            default: Date.now
-        },
-        trendingScore: {
-            type: Number,
-            default: 0
-        },
-        engagement: {
-            views: { type: Number, default: 0 },
-            shares: { type: Number, default: 0 }
-        },
-        lastActivity: {
-            type: Date,
-            default: Date.now
-        }
+    comments: [commentSchema],
+
+    // reaction: allow multiple reaction types (love, clap, etc.)
+    reactions: [{
+        user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+        type: { type: String, enum: ['like', 'love', 'clap', 'insightful', 'angry'], default: 'like' },
+        createdAt: { type: Date, default: Date.now }
     }],
+
+    // analytics
+    viewsCount: { type: Number, default: 0 },
+    readSessions: [{ //store lightweight read sessions
+        user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+        timeSpent: Number, //seconds
+        readAt: { type: Number, default: 0 }
+    }],
+    totalReadTime: { type: Number, default: 0 }, //seconds
 
     readTime: {
         type: Number,

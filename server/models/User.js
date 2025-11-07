@@ -45,6 +45,20 @@ const userSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User'
     }],
+
+    // bookmarks and reading progress for 'save for latter'
+    bookmarks: [{
+        blog: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'blog',
+            required: true
+        },
+        savedAt: { type: Date, default: Date.now },
+        //reading progress in second or percentage (frontend choose)
+        progress: { type: Number, default: 0 },
+        //mart if saved offline for the user (PWA)
+        offline: { type: Boolean, default: false }
+    }],
     readingHistory: [{
         blog: {
             type: mongoose.Schema.Types.ObjectId,
@@ -62,6 +76,12 @@ const userSchema = new mongoose.Schema({
         type: String,
         enum: ['user', 'admin'],
         default: 'user'
+    },
+
+    // user preferances for email digest / newsletters
+    preferences: {
+        newsletter: { type: Boolean, default: false },
+        digestFrequency: { type: String, enum: ['daily', 'weekly', 'monthly', 'none'], default: 'weekly' }
     }
 }, { timestamps: true });
 
