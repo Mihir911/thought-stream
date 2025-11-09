@@ -662,10 +662,74 @@ export const recordView = async (req, res) => {
                 const user = await User.findById(req.userId);
                 user.readingHistory.push({ blog: blogId, timeSpent, readAt: new Date() });
                 //keep history length reasonable
-                
+                if (user.readingHistory.length > 500) user.readingHistory.shift();
+                await user.save();
             }
         }
+        await blog.save();
+        res.json({ success: true, message: 'view recorded' });
     } catch (error) {
-        
+        console.error('Record view error:', error);
+        res.json(500).json({ success: false, mesage: 'Error recording view' });
     }
-}
+};
+
+// React to a blog ( flexible reaction types)
+export const reactToBlog = async (req, res) => {
+    try {
+        const { type } = req.body; //like, love, clap, insightfull, angry
+        const blogId = req.params.id;
+        const userId = req.userId;
+
+        const blog = await Blog.findById(blogId);
+        if (!blog) return res.status(404).json({ success: false, message: 'Blog not found' });
+
+        // remove any existing reaction from this user (single reaction per user)
+        blog.reactions = blog.reactions.filter(r => r.user.toString() !== userId);
+        // add new reaction
+        blog.reactions.push({ user: userId, type });
+        await blog.save();
+
+        res.json({ success: true, message: 'Reaction recorded', reactions: blog.reactions.length });
+    } catch (error) {
+        console.error('React error:', error);
+        res.status(500).json({ success: false, message: 'Error reacting to blog' });
+    }
+};
+
+// threaded comment (supports parent comment ID)
+export const addThreadedComment = async (req, res) => {
+    try {
+        const { text, parent } = req.body;
+        const blogId = req.params.id;
+
+        if (!text || text.trim().length === 0) {
+            return res.status(400).json({ success: false, message: 'Comment text is required' });
+
+            const comment = {
+                user: req.userId,
+                parent: parent || null,
+                text: text.trim(),
+                createdAt: new Date()
+            };
+
+            blog.comments.push(comment);
+            await blog.save();
+
+            //populate the new comment user details
+            await blog.populate({
+                path: 'comments.user',
+                select: 'username profilePicture'
+            });
+
+            //optionally update user interest when they comment
+            await updateUserInterests(req.userId, blog);
+
+            const newComment = blog.comments[blog.comments.length - 1];
+            res.json({ success: true, message: 'comment added', comment: newComment });
+        }
+    } catch (error) {
+        console.error('Add threaded comment error:', error);
+        res.status(500).json({ success: false, message: 'Error adding comment' });
+    }
+};
