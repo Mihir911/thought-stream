@@ -2,6 +2,7 @@ import Blog from "../models/Blog.js";
 import User from "../models/User.js";
 import { calculateBlogScore } from "../utils/feedAlgorithm.js";
 import { getTopSimilar, getTopSimilar } from "../utils/similarity.js";
+import mongoose from "mongoose";
 
 // @desc create a new blog
 // @route POST /api/blogs
@@ -555,3 +556,116 @@ export const getBlogsByCategory = async (req, res) => {
         });
     }
 };
+
+// @desc bookmark/save AND remove a blog
+// @route POST /api/blogs/:id/bookark
+// @access Private
+export const toggleBookmark = async (req, res) => {
+    try {
+        const user = await User.findById(req.userId);
+        const blogId = req.params.id;
+
+        const existing = user.bookmarks.find(b => b.blog.toString() === blogId);
+
+        if (existing) {
+            // remove bookmark
+            user.bookmarks = user.bookmarks.filter(b => b.blog.toString() !== blogId);
+            await user.save();
+            return res.json({ success: true, message: 'bookmark removed' });
+        }
+
+        user.bookmarks.push({ blog: blogId, savedAt: new Date(), progress: 0, offline: false });
+        await user.save();
+        res.json({ success: true, message: 'bookmarked' });
+    } catch (error) {
+        console.error('Toggle bookmark error:', error);
+        res.status(500).json({ success: false, message: 'Error toggling bookmark' });
+        
+    }
+};
+
+// @desc Get user's bookmarks(paginated)
+// @route GET /api/user/bookmarks
+// @ACCESS private
+export const getBookmarks = async (req, res) => {
+    try {
+        const { page = 1, limit = 20 } = req.query;
+        const user = await User.findById(req.userId).populate({
+            path: 'bookmarks.blog',
+            populate: { path: 'author', select: 'useraname profilePicture' }
+        });
+
+        const start = (page - 1) * limit;
+        const end = page * limit;
+        const bookmarks = user.bookmarks.slice(start, end);
+
+        res.json({
+            success: true,
+            bookmarks,
+            pagination: {
+                currentPage: parseInt(page),
+                totalBookmarks: user.bookmarks.length,
+                totalPages: Math.ceil(user.bookmarks.length / limit)
+            }
+        });
+    } catch (error) {
+        console.error('Get bookmarks error:', error);
+        res.status(500).json({ success: false, message: 'Error fetching bookmarks' });
+        
+    }
+};
+
+// @desc update bookmark progress (e.g. user reads 40% -> save)
+// @route PUT /api/user/:id/bookmark/progress
+// @access Private
+export const updateBookmarkProgress = async (req, res) => {
+    try {
+        const { progress } = req.body; //progress in seconds or percent (frontend decides)
+        const blogId = req.params.id;
+        const user = await User.findById(req.userId);
+
+        const b = user.bookmarks.find(bk => bk.blog.toString() === blogId);
+        if (!b) {
+            return res.status(404).json({ success: false, message: 'Bookmark not found' });
+        }
+
+        b.progress = progress;
+        await user.save();
+
+        res.json({ success: true, message: "Progress updated", bookmark: b });
+    } catch (error) {
+        console.error('Update bookmark progres error:', error);
+        res.status(500).json({ success: false, mesage: 'Error updating bookmark' });
+    }
+};
+
+// @desc Record a view/read session (allow anonymous if user not logged in)
+// @route POST /api/blogs/:id/view
+// @access public
+export const recordView = async (req, res) => {
+    try {
+        const blogId = req.params.id;
+        const { timeSpent = 0 } = req.body; //seconds
+        const blog = await Blog.findById(blogId);
+        if (!blog) return res.status(404).json({ success: false, message: 'Blog not found' });
+        
+        blog.viewsCount = (blog.viewsCount || 0) + 1;
+        if (timeSpent && timeSpent > 0) {
+            blog.readSessions.push({
+                user: req.userId || null,
+                timeSpent
+            });
+            blog.totalReadTime = (blog.totalReadTime || 0) + Number(timeSpent);
+
+            //if logged in, update user's reading history
+            if (req.userId) {
+                const user = await User.findById(req.userId);
+                user.readingHistory.push({ blog: blogId, timeSpent, readAt: new Date() });
+                //keep history length reasonable
+                
+            }
+        }
+    } catch (error) {
+        
+    }
+}
