@@ -733,3 +733,135 @@ export const addThreadedComment = async (req, res) => {
         res.status(500).json({ success: false, message: 'Error adding comment' });
     }
 };
+
+// Upvote a comment
+export const toggleCommentUpvote = async (req, res) => {
+    try {
+        const { commentId } = req.params;
+        const blogId = req.params.id;
+        const blog = await Blog.findById(blogId);
+        if (!blog) return res.status(404).json({ success: false, message: 'Blog not found' });
+
+        const comment = blog.comments.id(commentId);
+        if (!comment) return res.status(404).json({ success: false, message: 'Comment not found' });
+
+        const hasUpvoted = comment.upvotes.some(u => u.toString() === req.userId);
+        if (hasUpvoted) {
+            comment.upvotes = comment.upvotes.filter(u => u.toString() !== req.userId);
+        } else {
+            comment.upvotes.push(req.userId);
+        }
+        comment.lastActivity = new Date();
+        await blog.save();
+
+        res.json({ success: true, message: hasUpvoted ? 'Upvote removed' : 'Upvoted', upvotes: comment.upvotes.length });
+    } catch (error) {
+        console.error('Toggle comment upvote error:', error);
+        res.status(500).json({ success: false, message: 'Error updating upvote' });
+    }
+};
+
+// Follow / unfollow a user
+export const toggleFollowUser = async (req, res) => {
+    try {
+        const targetUserId = req.params.id;
+        if (req.userId === targetUserId) return res.status(400).json({ success: false, message: 'Cannot follow yourself' });
+
+        const me = await User.findById(req.userId);
+        const target = await User.findById(targetUserId);
+        if (!target) return res.status(404).json({ success: false, message: 'User not found' });
+
+        const isFollowing = me.following.some(f => f.toString() === targetUserId);
+        if (isFollowing) {
+            me.following = me.following.filter(f => f.toString() !== targetUserId);
+            await me.save();
+            return res.json({ success: true, message: 'Unfollowed user' });
+        } else {
+            me.following.push(targetUserId);
+            await me.save();
+            return res.json({ success: true, message: 'Following user' });
+        }
+    } catch (error) {
+        console.error('Toggle follow error:', error);
+        res.status(500).json({ success: false, message: 'Error following/unfollowing user' });
+    }
+};
+
+// Enhanced personalized feed: hybridize interests + follows + trending
+export const getHybridPersonalizedFeed = async (req, res) => {
+    try {
+        const user = await User.findById(req.userId);
+        const { page = 1, limit = 10 } = req.query;
+
+        // 1) Collect candidate blogs:
+        // - posts in user's interests
+        // - posts by followed authors
+        // - trending posts (recent + high engagement)
+        const interestCategories = user.interests?.map(i => i.category) || [];
+        const followedAuthors = user.following || [];
+
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 14);
+
+        // Query a superset of candidates (limit to keep work reasonable)
+        const candidates = await Blog.find({
+            isPublished: true,
+            $or: [
+                { categories: { $in: interestCategories } },
+                { author: { $in: followedAuthors } },
+                { createdAt: { $gte: sevenDaysAgo } }
+            ]
+        })
+        .populate('author', 'username profilePicture')
+        .lean()
+        .limit(100); // tuneable
+
+        // Compute scores using existing calculateBlogScore plus boosts
+        let scored = candidates.map(blog => {
+            let base = calculateBlogScore(blog, user.interests);
+            // boost if author followed
+            if (followedAuthors.map(String).includes(String(blog.author._id))) base += 4;
+            // boost if bookmarked
+            if (user.bookmarks.some(b => b.blog.toString() === blog._id.toString())) base += 2;
+            // time decay already handled in calculateBlogScore if implemented; else add recency
+            return { ...blog, score: base };
+        });
+
+        // also include some trending popular posts as fallback
+        if (scored.length < (limit * 2)) {
+            const trending = await Blog.find({ isPublished: true })
+                .sort({ likes: -1, viewsCount: -1, createdAt: -1 })
+                .limit(30)
+                .lean()
+                .populate('author', 'username profilePicture');
+            // merge unique
+            const ids = new Set(scored.map(b => b._id.toString()));
+            trending.forEach(t => {
+                if (!ids.has(t._id.toString())) {
+                    scored.push({ ...t, score: (t.likes?.length || 0) * 0.6 + 1 });
+                }
+            });
+        }
+
+        // sort by score desc
+        scored.sort((a, b) => b.score - a.score);
+
+        // paginate
+        const startIndex = (page - 1) * limit;
+        const endIndex = page * limit;
+        const paginated = scored.slice(startIndex, endIndex);
+
+        res.json({
+            success: true,
+            blogs: paginated,
+            pagination: {
+                currentPage: parseInt(page),
+                totalPages: Math.ceil(scored.length / limit),
+                totalBlogs: scored.length
+            }
+        });
+    } catch (error) {
+        console.error('Hybrid feed error:', error);
+        res.status(500).json({ success: false, message: 'Error fetching hybrid feed' });
+    }
+};
