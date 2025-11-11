@@ -1,7 +1,7 @@
 import Blog from "../models/Blog.js";
 import User from "../models/User.js";
 import { calculateBlogScore } from "../utils/feedAlgorithm.js";
-import { getTopSimilar, getTopSimilar } from "../utils/similarity.js";
+import { getTopSimilar } from "../utils/similarity.js";
 import mongoose from "mongoose";
 
 // @desc create a new blog
