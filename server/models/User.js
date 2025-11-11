@@ -50,7 +50,7 @@ const userSchema = new mongoose.Schema({
     bookmarks: [{
         blog: {
             type: mongoose.Schema.Types.ObjectId,
-            ref: 'blog',
+            ref: 'Blog',
             required: true
         },
         savedAt: { type: Date, default: Date.now },
