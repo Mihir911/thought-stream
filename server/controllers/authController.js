@@ -80,22 +80,22 @@ export const loginUser = async (req, res) => {
     }
 };
 
-//@desc get current user profile
-// @route GET /api/auth/profile
-//@access Private
-export const getProfile = async (req, res) => {
-    try {
-        const user = await User.findById(req.userId);
+// //@desc get current user profile
+// // @route GET /api/auth/profile
+// //@access Private
+// export const getProfile = async (req, res) => {
+//     try {
+//         const user = await User.findById(req.userId);
 
-        res.json({
-            success: true,
-            user
-        });
-    } catch (error) {
-        console.error('Get profile error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Server error fetching profile'
-        });
-    };
-};
+//         res.json({
+//             success: true,
+//             user
+//         });
+//     } catch (error) {
+//         console.error('Get profile error:', error);
+//         res.status(500).json({
+//             success: false,
+//             message: 'Server error fetching profile'
+//         });
+//     };
+// };

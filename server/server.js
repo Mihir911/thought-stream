@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import cors from "cors";
 import dotenv from "dotenv";
 import authRoutes from './routes/auth.js';
+import userRoutes from './routes/userRoutes.js'
 import blogRoutes from './routes/blogRoutes.js';
 
 //load environment variables
@@ -27,6 +28,7 @@ app.get('/api/health', (req, res) => {
 //routes
 app.use('/api/auth', authRoutes);
 app.use('/api/blogs', blogRoutes);
+app.use('/api/user', userRoutes);
 
 // adtabase connection 
 const connectDB = async () => {
