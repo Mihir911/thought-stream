@@ -16,13 +16,15 @@ const Profile = () => {
 
   useEffect(() => {
     let mounted = true;
-    api.get('/auth/profile').then(res => {
+    api.get('/user/me').then(res => {
       if (!mounted) return;
       const u = res.data.user;
       setUser(u);
       setSelected((u.interests || []).map(i => i.category));
       setPrefs(u.preferences || prefs);
-    }).catch(console.error).finally(() => setLoading(false));
+    }).catch(err => {
+        console.error('Failed to fetch user profile', err);
+    }).finally(() => setLoading(false));
     return () => { mounted = false; };
   }, []);
 
@@ -36,7 +38,7 @@ const Profile = () => {
       const payload = selected.map(s => ({ category: s, score: 1 }));
       await api.put('/user/interests', { interests: payload });
       // refresh profile
-      const res = await api.get('/auth/profile');
+      const res = await api.get('/user/me');
       setUser(res.data.user);
     } catch (err) {
       console.error('Save interests failed', err);
@@ -49,7 +51,7 @@ const Profile = () => {
     try {
       setSavingPrefs(true);
       await api.put('/user/preferences', prefs);
-      const res = await api.get('/auth/profile');
+      const res = await api.get('/user/me');
       setUser(res.data.user);
     } catch (err) {
       console.error('Save prefs failed', err);

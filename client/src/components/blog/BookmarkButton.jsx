@@ -5,7 +5,7 @@ import api from '../../utils/api';
 const BookmarkButton = ({ blogId, initialBookmarked = false, onChange }) => {
   const [bookmarked, setBookmarked] = useState(initialBookmarked);
   const [loading, setLoading] = useState(false);
-Book
+
   const handleToggle = async () => {
     try {
       setLoading(true);

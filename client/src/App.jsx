@@ -16,6 +16,7 @@ import BlogDetail from './pages/BlogDetail';
 import Bookmarks from './pages/Bookmarks';
 import HybridFeed from './pages/HybridFeed';
 
+
 function App() {
   const { token } = useSelector(state => state.auth);
 
@@ -37,6 +38,7 @@ function App() {
           <Route path="/blogs/:id" element={<BlogDetail />} />
           <Route path="/bookmarks" element={<Bookmarks />} />
           <Route path="/feed" element={<HybridFeed />} />
+
 
           {/* fallback to landing */}
           <Route path="*" element={<Landing />} />

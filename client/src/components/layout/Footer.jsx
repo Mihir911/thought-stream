@@ -15,13 +15,13 @@ const Footer = () => {
               ideas, and experiences with the world.
             </p>
             <div className="flex space-x-3">
-              <a href="#" className="p-2 bg-gray-700 rounded-full hover:bg-blue-600 transition-colors duration-200">
+              <a href="#" aria-label="Twitter" className="p-2 bg-gray-700 rounded-full hover:bg-blue-600 transition-colors duration-200">
                 <Twitter className="h-4 w-4" />
               </a>
-              <a href="#" className="p-2 bg-gray-700 rounded-full hover:bg-gray-600 transition-colors duration-200">
+              <a href="#" aria-label="Github" className="p-2 bg-gray-700 rounded-full hover:bg-gray-600 transition-colors duration-200">
                 <Github className="h-4 w-4" />
               </a>
-              <a href="#" className="p-2 bg-gray-700 rounded-full hover:bg-red-600 transition-colors duration-200">
+              <a href="#" aria-label="Contact" className="p-2 bg-gray-700 rounded-full hover:bg-red-600 transition-colors duration-200">
                 <Mail className="h-4 w-4" />
               </a>
             </div>
@@ -32,7 +32,7 @@ const Footer = () => {
             <h3 className="text-lg font-semibold text-white">Quick Links</h3>
             <ul className="space-y-2">
               <li><Link to="/" className="text-gray-300 hover:text-white transition-colors duration-200">Home</Link></li>
-              <li><Link to="/blogs" className="text-gray-300 hover:text-white transition-colors duration-200">All Blogs</Link></li>
+              <li><Link to="/feed" className="text-gray-300 hover:text-white transition-colors duration-200">For You</Link></li>
               <li><Link to="/trending" className="text-gray-300 hover:text-white transition-colors duration-200">Trending</Link></li>
               <li><Link to="/categories" className="text-gray-300 hover:text-white transition-colors duration-200">Categories</Link></li>
             </ul>
@@ -66,7 +66,7 @@ const Footer = () => {
           <p className="text-gray-400 flex items-center justify-center space-x-1">
             <span>Made with</span>
             <Heart className="h-4 w-4 text-red-500 fill-current" />
-            <span>by the BlogSpace Team • © 2024 All rights reserved</span>
+            <span>by the BlogSpace Team • © {new Date().getFullYear()} All rights reserved</span>
           </p>
         </div>
       </div>

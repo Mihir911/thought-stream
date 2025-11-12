@@ -9,7 +9,7 @@ const RelatedPosts = ({ blogId }) => {
     useEffect(() => {
         if (!blogId) return;
         setLoading(true);
-        api.get(`/blog/${blogId}/related`).then(res => {
+        api.get(`/blogs/${blogId}/related`).then(res => {
             setRelated(res.data.relatedBlogs || res.data.related || []);
         }).catch(err => {
             console.error('Related fetch error', err);
