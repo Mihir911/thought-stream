@@ -26,7 +26,8 @@ const Login = () => {
     e.preventDefault()
     const result = await dispatch(loginUser(formData))
     if (result.type === 'auth/login/fulfilled') {
-      navigate('/')
+      const dest = location.state?.from || '/';
+      navigate(dest);
     }
   }
 
