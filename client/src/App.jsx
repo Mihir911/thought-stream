@@ -15,6 +15,7 @@ import Trending from './pages/Trending';
 import BlogDetail from './pages/BlogDetail';
 import Bookmarks from './pages/Bookmarks';
 import HybridFeed from './pages/HybridFeed';
+import CreateBlog from './pages/CreateBlog';
 
 
 function App() {
@@ -28,6 +29,7 @@ function App() {
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/create" element={<CreateBlog />} /> 
 
           <Route path="/categories" element={<Categories />} />
           <Route path="/categories/:category" element={<CategoryPage />} />

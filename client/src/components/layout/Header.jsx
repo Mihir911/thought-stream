@@ -7,6 +7,7 @@ import Logo from '../../components/ui/Logo';
 import ProtectedLink from "../auth/ProtectedLinks";
 
 
+
 const Header = () => {
   const dispatch = useDispatch();
   const { user, token } = useSelector((s) => s.auth || {});
@@ -29,7 +30,7 @@ const Header = () => {
               <div className="p-1 rounded-md bg-gradient-to-r from-sky-600 to-blue-600">
                 <Logo className="h-9 w-auto" />
               </div>
-              <span className="hidden sm:inline-block text-lg font-extrabold text-slate-900">BlogSpace</span>
+              {/* <span className="hidden sm:inline-block text-lg font-extrabold text-slate-900">BlogSpace</span> */}
             </Link>
           </div>
 
