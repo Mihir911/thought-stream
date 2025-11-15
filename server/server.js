@@ -5,6 +5,9 @@ import dotenv from "dotenv";
 import authRoutes from './routes/auth.js';
 import userRoutes from './routes/userRoutes.js'
 import blogRoutes from './routes/blogRoutes.js';
+import path from 'path';
+import uploadRoutes from './routes/uploadRoutes.js';
+
 
 //load environment variables
 dotenv.config();
@@ -16,6 +19,9 @@ const PORT = process.env.PORT;
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 
+//serve uploaded files
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+
 //health check route
 app.get('/api/health', (req, res) => {
     res.json({
@@ -25,10 +31,12 @@ app.get('/api/health', (req, res) => {
     });
 });
 
+
 //routes
 app.use('/api/auth', authRoutes);
 app.use('/api/blogs', blogRoutes);
 app.use('/api/user', userRoutes);
+app.use('/api/uploads', uploadRoutes);
 
 // adtabase connection 
 const connectDB = async () => {

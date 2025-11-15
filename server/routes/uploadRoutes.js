@@ -2,12 +2,29 @@ import express from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
-import { uploadImage } from '../controllers/uploadController.js';
-import { protect } from "../middleware/auth.js";
-
+import { uploadImage, serveUpload, serveThumbnail, updateUploadMetadata } from '../controllers/uploadController.js';
+import { protect } from '../middleware/auth.js';
 
 const router = express.Router();
 
-//ensure uploads folder exists
-const uploadsDir = path.join(process.cwd(), 'uploads');
-if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+// multer memory storage (we stream processed buffers into GridFS)
+const storage = multer.memoryStorage();
+const upload = multer({
+  storage,
+  limits: { fileSize: 12 * 1024 * 1024 } // 12MB limit (tweak as needed)
+});
+
+// POST /api/uploads
+// Protected: user must be authenticated
+router.post('/', protect, upload.single('file'), uploadImage);
+
+// GET original file by upload id
+router.get('/:id', serveUpload);
+
+// GET thumbnail by size (small|medium|large)
+router.get('/:id/thumbnail/:size', serveThumbnail);
+
+// PATCH metadata (alt/caption/display)
+router.patch('/:id/metadata', protect, updateUploadMetadata);
+
+export default router;

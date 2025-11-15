@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import api from '../utils/api';
 import { Image, Paperclip, Trash, Save, ArrowUpRight } from 'lucide-react';
+import ImageUploader from '../components/editor/ImageUploader';
+import { captureOwnerStack } from 'react';
 /**
  * CreateBlog - polished editor page with:
  * - Cover image (URL or upload -> base64 preview)
@@ -119,6 +121,8 @@ const CreateBlog = () => {
   const [tags, setTags] = useState([]);
   const [isPublishing, setIsPublishing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [selectedCategories, setSelectedCategories] = useState([]);
@@ -192,37 +196,19 @@ const CreateBlog = () => {
     reader.readAsDataURL(file);
   };
 
-  // NEW: improved insertion that writes metadata comment + prompts for alt & caption + inserts at caret
-  const handleInsertImageToContent = (file) => {
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const dataUrl = e.target.result;
-      const sizeKb = Math.round((file.size || 0) / 1024);
-      const meta = `${file.name} | ${file.type || 'unknown'} | ${sizeKb}KB`;
+  const onImageUpload = (url, originalName) => {
+    let alt = originalName || 'image';
+    try { alt = window.prompt('Alt text (for accessibility)', originalName) || originalName; } catch (err) { }
+    let caption = "";
+    try {
+      caption = window.prompt('Optional caption (leave empty to skip)') || '';
+    } catch (error) {}
 
-      // Prompt user for alt text and caption (simple UI without adding extra components)
-      let alt = '';
-      try {
-        alt = window.prompt('Enter alt text for the image (used for accessibility)', file.name) || file.name;
-      } catch (err) {
-        alt = file.name;
-      }
-      let caption = '';
-      try {
-        caption = window.prompt('Optional caption for the image (leave empty for none)', '') || '';
-      } catch (err) {
-        caption = '';
-      }
-
-      const captionMd = caption ? `\n*${caption}*` : '';
-      const md = `\n\n<!-- image: ${meta} -->\n![${alt}](${dataUrl})${captionMd}\n\n`;
-
-      insertAtCursor(md);
-      setSuccessMsg('Image inserted into content');
-      setTimeout(() => setSuccessMsg(''), 1200);
-    };
-    reader.readAsDataURL(file);
+    const captionMd = caption ? `\n*${caption}*` : '';
+    const md = `\n\n![${alt}](${url})${captionMd}\n\n`;
+    insertAtCursor(md);
+    setSuccessMsg('Image inserted');
+    setTimeout(() => setSuccessMsg(''), 1200);
   };
 
   const toggleCategory = (c) => {
@@ -313,11 +299,13 @@ const CreateBlog = () => {
                 <span className="text-xs text-slate-600">Upload cover</span>
               </label>
 
-              <label className="flex items-center gap-2 bg-white border border-slate-200 px-3 py-2 rounded-md cursor-pointer hover:shadow-sm">
+              {/* <label className="flex items-center gap-2 bg-white border border-slate-200 px-3 py-2 rounded-md cursor-pointer hover:shadow-sm">
                 <Paperclip className="h-4 w-4 text-slate-500" />
                 <input type="file" accept="image/*" onChange={(e) => handleInsertImageToContent(e.target.files?.[0])} className="hidden" />
                 <span className="text-xs text-slate-600">Insert image</span>
-              </label>
+              </label> */}
+
+                <ImageUploader onUploaded={onImageUpload} buttonText="Insert image" /> 
 
               <button
                 onClick={handleSaveDraft}

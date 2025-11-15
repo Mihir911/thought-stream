@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+import mongoose, { mongo } from "mongoose";
 
 const commentSchema = new mongoose.Schema({
     user: {
@@ -32,6 +32,11 @@ const commentSchema = new mongoose.Schema({
     }
 });
 
+const blockSchema = new mongoose.Schema({
+    type: { type: String, required: true },
+    data: { type: mongoose.Schema.Types.Mixed, default: {} }
+}, { _id: false });
+
 const blogSchema = new mongoose.Schema({
     title: {
         type: String,
@@ -43,8 +48,12 @@ const blogSchema = new mongoose.Schema({
 
     content: {
         type: String,
-        required: [true, 'Blog content is required'],
-        minlength: [50, 'Content must be at least 50 characters']
+        default: ''
+    },
+
+    contentBlocks: {
+    type: [blockSchema],
+    default: []
     },
 
     excerpt: {
@@ -56,6 +65,11 @@ const blogSchema = new mongoose.Schema({
         type: String,
         default: ''
     },
+    coverUpload: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Upload',
+    default: null
+  },
 
     author: {
         type: mongoose.Schema.Types.ObjectId,
@@ -109,17 +123,70 @@ const blogSchema = new mongoose.Schema({
     timestamps: true
 });
 
-//generate excerpt from content before saving
-blogSchema.pre('save', function (next) {
-    if (this.isModified('content')) {
-        //create excerpt from fisrt 150 character of content
-        this.excerpt = this.content.substring(0, 150) + '...';
 
-        //calculate readt time (assuming 200 words per minute)
-        const words = this.content.split(/\s+/);
-        const wordCount = words.length;
-        this.readTime = Math.ceil(wordCount / 200);
+
+function extractTextFromBlocks(blocks = []) {
+  try {
+    if (!Array.isArray(blocks) || blocks.length === 0) return '';
+    let text = '';
+    for (const b of blocks) {
+      if (!b || !b.type) continue;
+      const d = b.data || {};
+      switch (b.type) {
+        case 'heading':
+          text += (d.text || '') + '\n\n';
+          break;
+        case 'paragraph':
+          text += (d.text || '') + '\n\n';
+          break;
+        case 'list':
+          if (Array.isArray(d.items)) text += d.items.join(' ') + '\n\n';
+          break;
+        case 'quote':
+          text += (d.text || '') + '\n\n';
+          break;
+        case 'code':
+          text += (d.code || '') + '\n\n';
+          break;
+        case 'image':
+          // use caption or alt as text representation
+          text += (d.caption || d.alt || '') + '\n\n';
+          break;
+        default:
+          // generic fallback: try text field
+          if (d.text) text += d.text + '\n\n';
+          break;
+      }
     }
+    return text.trim();
+  } catch (err) {
+    return '';
+  }
+}
+
+
+// generate excerpt & readtime before saving
+blogSchema.pre('save', function (next) {
+    const sourceText = (this.contentBlocks && this.contentBlocks.length > 0 )
+    ? extractTextFromBlocks(this.contentBlocks)
+    : (this.content || '');
+
+    if (sourceText) {
+        // excerpt: first ~150 characters of meaningful text
+        const plain = sourceText.replace(/\s+/g, ' ').trim();
+        this.excerpt = plain.substring(0, 150) + (plain.length > 150 ? '...' : '');
+
+        //readTime : approximate 200 wpm
+        const words = plain.split(/\s+/).filter(Boolean);
+        const wordCount = words.length;
+        this.readTime = Math.max(1, Math.ceil(wordCount / 200));
+    } else {
+        // leave defaults 
+        if (!this.excerpt) this.excerpt = '';
+        if (!this.readTime) this.readTime = 0;
+        
+    }
+
     next();
 });
 
