@@ -25,6 +25,12 @@ const uploadSchema = new mongoose.Schema({
         large: { type: mongoose.Schema.Types.ObjectId, default: null }
     },
 
+    derivatives: {
+        type: Map,
+        of: mongoose.Schema.Types.ObjectId, 
+        default: {}
+    },
+
     //Display metadata (editable by user)
     alt: { type: String, default: '' },
     caption: { type: String, default: '' },

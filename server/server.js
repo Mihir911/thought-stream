@@ -7,6 +7,7 @@ import userRoutes from './routes/userRoutes.js'
 import blogRoutes from './routes/blogRoutes.js';
 import path from 'path';
 import uploadRoutes from './routes/uploadRoutes.js';
+import draftRoutes from './routes/draftRoutes.js';
 
 
 //load environment variables
@@ -37,6 +38,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/blogs', blogRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api/uploads', uploadRoutes);
+app.use('/api/drafts', draftRoutes);
 
 // adtabase connection 
 const connectDB = async () => {

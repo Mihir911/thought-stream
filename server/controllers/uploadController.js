@@ -53,7 +53,7 @@ export const uploadImage = async (req, res) => {
     const normalizedBuffer = await image.rotate().toBuffer();
 
     // store original in GridFS
-    const originalFileName = `${Date.now()}-${originalname}`.replace(/\s+/g, '_');
+    const originalFileName = `${Date.now()}-${originalname}`.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_\.\-]/g, '');
     const originalFileId = await bufferToGridFS(normalizedBuffer, originalFileName, mimeType);
 
     // generate medium and small thumbnails
@@ -210,5 +210,51 @@ export const updateUploadMetadata = async (req, res) => {
   } catch (error) {
     console.error('Update upload metadata error:', error);
     res.status(500).json({ success: false, message: 'Error updating metadata' });
+  }
+};
+
+
+
+/**
+ * DELETE /api/uploads/:id
+ * Delete GridFS bytes and Upload doc. Only uploader or admin allowed.
+ * Assumes protect middleware has set req.user and req.userId
+ */
+export const deleteUpload = async (req, res) => {
+  try {
+    const id = req.params.id;
+    const upload = await Upload.findById(id);
+    if (!upload) return res.status(404).json({ success: false, message: 'Upload not found' });
+
+    const user = req.user;
+    if (!user) return res.status(401).json({ success: false, message: 'Not authorized' });
+
+    const isOwner = upload.uploadedBy.toString() === user._id.toString();
+    const isAdmin = user.role === 'admin';
+    if (!isOwner && !isAdmin) return res.status(403).json({ success: false, message: 'Forbidden' });
+
+    const bucket = new mongoose.mongo.GridFSBucket(mongoose.connection.db, { bucketName: 'fs' });
+
+    // delete original file
+    if (upload.fileId) {
+      try { await bucket.delete(upload.fileId); } catch (err) { console.warn('Failed to delete original GridFS file:', err.message || err); }
+    }
+
+    // delete thumbnails if present
+    const thumbs = upload.thumbnails || {};
+    for (const sizeKey of ['small', 'medium', 'large']) {
+      const fid = thumbs[sizeKey];
+      if (fid) {
+        try { await bucket.delete(fid); } catch (err) { console.warn(`Failed to delete thumbnail ${sizeKey}:`, err.message || err); }
+      }
+    }
+
+    // finally remove the Upload doc
+    await Upload.findByIdAndDelete(id);
+
+    res.json({ success: true, message: 'Upload deleted' });
+  } catch (error) {
+    console.error('deleteUpload error:', error);
+    res.status(500).json({ success: false, message: 'Error deleting upload' });
   }
 };

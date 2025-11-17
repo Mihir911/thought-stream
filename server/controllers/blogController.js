@@ -9,17 +9,43 @@ import mongoose from "mongoose";
 //@access private
 export const createBlog = async (req, res) => {
     try {
-        const { title, content, categories, tags, coverImage, isPublished } = req.body;
+        const { title, content, categories, tags, coverImage, contentBlocks, coverUpload, isPublished } = req.body;
 
-        const blog = await Blog.create({
+        const blogData = {
             title,
-            content,
+            content: content || '',
+            contentBlocks: Array.isArray(contentBlocks) ? contentBlocks : [],
             categories: categories || [],
             tags: tags || [],
             coverImage: coverImage || '',
+            coverUpload: coverUpload || null,
             isPublished: isPublished !== undefined ? isPublished : true,
             author: req.userId
-        });
+        };
+
+
+        const blog = await Blog.create(blogData);
+
+        // For each referenced upload in blocks or cover, increment usageCount so we can track usage
+        const uploadIdsToInc = new Set();
+        if (blog.coverUpload) uploadIdsToInc.add(blog.coverUpload.toString());
+
+        // scan blocks for image types with uploadId
+        if (Array.isArray(blog.contentBlocks)) {
+            for (const b of blog.contentBlocks) {
+                if (b && b.type === 'image' && b.data && b.data.uploadId) {
+                    uploadIdsToInc.add(b.data.uploadId.toString());
+                }
+            }
+        }
+
+        if (uploadIdsToInc.size > 0) {
+            await Upload.updateMany(
+                { _id: { $in: Array.from(uploadIdsToInc) } },
+                { $inc: { usageCount: 1 } }
+            );
+        }
+
 
         //populate author info
         await blog.populate('author', 'username profilePicture');
@@ -45,30 +71,30 @@ export const createBlog = async (req, res) => {
 // @access  Public
 export const getBlogs = async (req, res) => {
     try {
-        const { 
-            page = 1, 
-            limit = 10, 
-            search, 
-            category, 
-            author, 
-            sortBy = 'createdAt', 
-            sortOrder = 'desc' 
+        const {
+            page = 1,
+            limit = 10,
+            search,
+            category,
+            author,
+            sortBy = 'createdAt',
+            sortOrder = 'desc'
         } = req.query;
 
         // Build filter object
         const filter = { isPublished: true };
-        
+
         if (search) {
             filter.$or = [
                 { title: { $regex: search, $options: 'i' } },
                 { content: { $regex: search, $options: 'i' } }
             ];
         }
-        
+
         if (category) {
             filter.categories = { $in: [category] };
         }
-        
+
         if (author) {
             filter.author = author;
         }
@@ -143,43 +169,25 @@ export const getBlogById = async (req, res) => {
 // @route   PUT /api/blogs/:id
 // @access  Private (Author only)
 export const updateBlog = async (req, res) => {
-    try {
-        const blog = await Blog.findById(req.params.id);
+  try {
+    const blog = await Blog.findById(req.params.id);
+    if (!blog) return res.status(404).json({ success: false, message: 'Blog not found' });
 
-        if (!blog) {
-            return res.status(404).json({
-                success: false,
-                message: 'Blog not found'
-            });
-        }
-
-        // Check if user is the author
-        if (blog.author.toString() !== req.userId) {
-            return res.status(403).json({
-                success: false,
-                message: 'Not authorized to update this blog'
-            });
-        }
-
-        const updatedBlog = await Blog.findByIdAndUpdate(
-            req.params.id,
-            req.body,
-            { new: true, runValidators: true }
-        ).populate('author', 'username profilePicture');
-
-        res.json({
-            success: true,
-            message: 'Blog updated successfully',
-            blog: updatedBlog
-        });
-
-    } catch (error) {
-        console.error('Update blog error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Error updating blog'
-        });
+    if (blog.author.toString() !== req.userId) {
+      return res.status(403).json({ success: false, message: 'Not authorized to update this blog' });
     }
+
+    // Optionally compute the difference in upload usage counts:
+    // For simplicity we won't decrement usageCount for removed uploads here;
+    // a periodic cleanup job can find orphaned uploads (usageCount === 0).
+    const updated = await Blog.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+    await updated.populate('author', 'username profilePicture');
+
+    res.json({ success: true, message: 'Blog updated successfully', blog: updated });
+  } catch (error) {
+    console.error('Update blog error:', error);
+    res.status(500).json({ success: false, message: 'Error updating blog' });
+  }
 };
 
 // @desc    Delete blog
@@ -270,7 +278,7 @@ export const toggleLike = async (req, res) => {
 export const addComment = async (req, res) => {
     try {
         const { text } = req.body;
-        
+
         if (!text || text.trim().length === 0) {
             return res.status(400).json({
                 success: false,
@@ -293,10 +301,10 @@ export const addComment = async (req, res) => {
         });
 
         await blog.save();
-        
+
         // UPDATE USER INTERESTS WHEN THEY COMMENT ON A BLOG
         await updateUserInterests(req.userId, blog);
-        
+
         // Populate the new comment with user info
         await blog.populate('comments.user', 'username profilePicture');
 
@@ -321,11 +329,11 @@ export const addComment = async (req, res) => {
 const updateUserInterests = async (userId, blog) => {
     try {
         const user = await User.findById(userId);
-        
+
         if (!user.interests) {
             user.interests = [];
         }
-        
+
         blog.categories.forEach(category => {
             const existingInterest = user.interests.find(i => i.category === category);
             if (existingInterest) {
@@ -334,7 +342,7 @@ const updateUserInterests = async (userId, blog) => {
                 user.interests.push({ category, score: 1 });
             }
         });
-        
+
         await user.save();
     } catch (error) {
         console.error('Update user interests error:', error);
@@ -350,26 +358,26 @@ export const getPersonalizedFeed = async (req, res) => {
     try {
         const user = await User.findById(req.userId).populate('interests');
         const { page = 1, limit = 10 } = req.query;
-        
+
         // Get all published blogs
         let blogs = await Blog.find({ isPublished: true })
             .populate('author', 'username profilePicture')
             .lean();
-        
+
         // Calculate scores for each blog
         blogs = blogs.map(blog => ({
             ...blog,
             score: calculateBlogScore(blog, user.interests)
         }));
-        
+
         // Sort by score (highest first)
         blogs.sort((a, b) => b.score - a.score);
-        
+
         // Paginate
         const startIndex = (page - 1) * limit;
         const endIndex = page * limit;
         const paginatedBlogs = blogs.slice(startIndex, endIndex);
-        
+
         res.json({
             success: true,
             blogs: paginatedBlogs,
@@ -379,7 +387,7 @@ export const getPersonalizedFeed = async (req, res) => {
                 totalBlogs: blogs.length
             }
         });
-        
+
     } catch (error) {
         console.error('Personalized feed error:', error);
         res.status(500).json({
@@ -395,31 +403,31 @@ export const getPersonalizedFeed = async (req, res) => {
 export const getTrendingBlogs = async (req, res) => {
     try {
         const { page = 1, limit = 10 } = req.query;
-        
+
         const sevenDaysAgo = new Date();
         sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-        
+
         const blogs = await Blog.find({
             isPublished: true,
             createdAt: { $gte: sevenDaysAgo }
         })
-        .populate('author', 'username profilePicture')
-        .sort({ likes: -1, createdAt: -1 })
-        .limit(limit * 1)
-        .skip((page - 1) * limit);
-        
+            .populate('author', 'username profilePicture')
+            .sort({ likes: -1, createdAt: -1 })
+            .limit(limit * 1)
+            .skip((page - 1) * limit);
+
         res.json({
             success: true,
             blogs,
             pagination: {
                 currentPage: parseInt(page),
-                totalPages: Math.ceil(await Blog.countDocuments({ 
+                totalPages: Math.ceil(await Blog.countDocuments({
                     isPublished: true,
                     createdAt: { $gte: sevenDaysAgo }
                 }) / limit)
             }
         });
-        
+
     } catch (error) {
         console.error('Trending blogs error:', error);
         res.status(500).json({
@@ -435,7 +443,7 @@ export const getTrendingBlogs = async (req, res) => {
 export const getRelatedBlogs = async (req, res) => {
     try {
         const blog = await Blog.findById(req.params.id).lean();
-        
+
         if (!blog) {
             return res.status(404).json({
                 success: false,
@@ -454,9 +462,9 @@ export const getRelatedBlogs = async (req, res) => {
                 { author: blog.author }
             ]
         })
-        .populate('author', 'username profilePicture')
-        .limit(200) // tune this; larger = slower
-        .lean();
+            .populate('author', 'username profilePicture')
+            .limit(200) // tune this; larger = slower
+            .lean();
 
         // if not enough candidates, fallback to recent popular post
         if (candidates.length < 6) {
@@ -464,10 +472,10 @@ export const getRelatedBlogs = async (req, res) => {
                 _id: { $ne: blog._id },
                 isPublished: true
             })
-            .populate('author', 'username profilePicture')
-            .sort({ likes: -1, createdAt: -1 })
-            .limit(20)
-            .lean();
+                .populate('author', 'username profilePicture')
+                .sort({ likes: -1, createdAt: -1 })
+                .limit(20)
+                .lean();
             //merge unique candidates
             const ids = new Set(candidates.map(c => c._id.toString()));
             fallback.forEach(f => {
@@ -478,8 +486,8 @@ export const getRelatedBlogs = async (req, res) => {
         //----2) Builld minimal docs array (query first)
         const docs = [
             {
-            id: blog._id.toString(),
-            text: `${blog.title} ${blog,excerpt || ''} ${blog.content?.slice(0, 2000) || ''} ${(blog.tags || []).join(' ')}`
+                id: blog._id.toString(),
+                text: `${blog.title} ${blog, excerpt || ''} ${blog.content?.slice(0, 2000) || ''} ${(blog.tags || []).join(' ')}`
             },
             ...candidates.map(c => ({
                 id: c._id.toString(),
@@ -522,21 +530,21 @@ export const getBlogsByCategory = async (req, res) => {
     try {
         const { category } = req.params;
         const { page = 1, limit = 10 } = req.query;
-        
+
         const blogs = await Blog.find({
             isPublished: true,
             categories: { $in: [category] }
         })
-        .populate('author', 'username profilePicture')
-        .sort({ createdAt: -1 })
-        .limit(limit * 1)
-        .skip((page - 1) * limit);
-        
+            .populate('author', 'username profilePicture')
+            .sort({ createdAt: -1 })
+            .limit(limit * 1)
+            .skip((page - 1) * limit);
+
         const total = await Blog.countDocuments({
             isPublished: true,
             categories: { $in: [category] }
         });
-        
+
         res.json({
             success: true,
             blogs,
@@ -547,7 +555,7 @@ export const getBlogsByCategory = async (req, res) => {
                 totalBlogs: total
             }
         });
-        
+
     } catch (error) {
         console.error('Category blogs error:', error);
         res.status(500).json({
@@ -580,7 +588,7 @@ export const toggleBookmark = async (req, res) => {
     } catch (error) {
         console.error('Toggle bookmark error:', error);
         res.status(500).json({ success: false, message: 'Error toggling bookmark' });
-        
+
     }
 };
 
@@ -611,7 +619,7 @@ export const getBookmarks = async (req, res) => {
     } catch (error) {
         console.error('Get bookmarks error:', error);
         res.status(500).json({ success: false, message: 'Error fetching bookmarks' });
-        
+
     }
 };
 
@@ -648,7 +656,7 @@ export const recordView = async (req, res) => {
         const { timeSpent = 0 } = req.body; //seconds
         const blog = await Blog.findById(blogId);
         if (!blog) return res.status(404).json({ success: false, message: 'Blog not found' });
-        
+
         blog.viewsCount = (blog.viewsCount || 0) + 1;
         if (timeSpent && timeSpent > 0) {
             blog.readSessions.push({
@@ -812,9 +820,9 @@ export const getHybridPersonalizedFeed = async (req, res) => {
                 { createdAt: { $gte: sevenDaysAgo } }
             ]
         })
-        .populate('author', 'username profilePicture')
-        .lean()
-        .limit(100); // tuneable
+            .populate('author', 'username profilePicture')
+            .lean()
+            .limit(100); // tuneable
 
         // Compute scores using existing calculateBlogScore plus boosts
         let scored = candidates.map(blog => {
