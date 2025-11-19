@@ -1,260 +1,212 @@
-import mongoose from 'mongoose';
-import sharp from 'sharp';
-import stream from 'stream';
-import Upload from '../models/Upload.js';
+import Upload from "../models/Upload.js";
+import { v2 as cloudinary } from 'cloudinary';
+import dotenv from "dotenv";
 
-/**
- * Helper: stream buffer into GridFSBucket and return fileId (ObjectId)
- */
-const bufferToGridFS = (buffer, filename, contentType) => {
-  return new Promise((resolve, reject) => {
-    const bucket = new mongoose.mongo.GridFSBucket(mongoose.connection.db, { bucketName: 'fs' }); // use default fs bucket
-    const uploadStream = bucket.openUploadStream(filename, {
-      contentType
-    });
-    const passthrough = new stream.PassThrough();
-    passthrough.end(buffer);
-    passthrough.pipe(uploadStream)
-      .on('error', (err) => reject(err))
-      .on('finish', (file) => resolve(file._id));
-  });
-};
+dotenv.config();
 
-/**
+//configure Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+/** 
  * POST /api/uploads
- * Protected.
- * Expects multipart/form-data file='file'
- * Returns Upload document with api URLs (GET /api/uploads/:id etc.)
+ * upload image to CLOUDINARY and create upload document
  */
 export const uploadImage = async (req, res) => {
   try {
-    // multer memoryStorage puts buffer at req.file.buffer
-    if (!req.file || !req.file.buffer) {
-      return res.status(400).json({ success: false, message: 'No file uploaded' });
+
+
+    // Check if Cloudinary is properly configured
+    if (!process.env.CLOUDINARY_CLOUD_NAME || 
+        !process.env.CLOUDINARY_API_KEY || 
+        !process.env.CLOUDINARY_API_SECRET) {
+      console.error('❌ Cloudinary env vars missing');
+      return res.status(500).json({
+        success: false,
+        message: 'Cloudinary configuration missing. Please check server configuration.'
+      });
     }
 
-    const fileBuffer = req.file.buffer;
-    const originalname = req.file.originalname || 'upload';
-    const mimeType = req.file.mimetype || 'application/octet-stream';
-    const size = req.file.size || fileBuffer.length;
-
-    // Basic validation (allow images)
-    const allowed = ['image/jpeg', 'image/png', 'image/webp'];
-    if (!allowed.includes(mimeType)) {
-      return res.status(400).json({ success: false, message: 'Unsupported file type' });
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: 'no file uploaded'
+      });
     }
 
-    // Use sharp to read metadata and create thumbnails (non-destructive)
-    const image = sharp(fileBuffer);
-    const metadata = await image.metadata();
-
-    // normalize/orient original (do not enlarge). We'll stream original bytes as-is (or as converted)
-    // Get a buffer of normalized original (auto-orient) to ensure consistent orientation
-    const normalizedBuffer = await image.rotate().toBuffer();
-
-    // store original in GridFS
-    const originalFileName = `${Date.now()}-${originalname}`.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_\.\-]/g, '');
-    const originalFileId = await bufferToGridFS(normalizedBuffer, originalFileName, mimeType);
-
-    // generate medium and small thumbnails
-    const thumbnails = {};
-    try {
-      // medium: 1200px width max
-      const mediumBuf = await sharp(normalizedBuffer).resize({ width: 1200, withoutEnlargement: true }).toBuffer();
-      thumbnails.medium = await bufferToGridFS(mediumBuf, `medium-${originalFileName}`, mimeType);
-    } catch (err) {
-      // ignore thumbnail errors, log later
-      console.warn('Medium thumbnail generation failed:', err.message || err);
+    // validate file type
+    const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (!allowedMimeTypes.includes(req.file.mimetype)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Unsupported file type. Only JPEG, PNG, WebP, and GIF are allowed.'
+      });
     }
 
-    try {
-      // small: 400px width
-      const smallBuf = await sharp(normalizedBuffer).resize({ width: 400, withoutEnlargement: true }).toBuffer();
-      thumbnails.small = await bufferToGridFS(smallBuf, `small-${originalFileName}`, mimeType);
-    } catch (err) {
-      console.warn('Small thumbnail generation failed:', err.message || err);
+    // Validate file size
+    const maxSize = 10 * 1024 * 1024;
+    if (req.file.size > maxSize) {
+      return res.status(400).json({
+        success: false,
+        message: 'File too large. Maximum size is 10mb.'
+      });
     }
+
+    // Upload to Cloudinary
+    const uploadResult = await new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          folder: 'blogspace',
+          transformation: [
+            { quality: 'auto', fetch_format: 'auto' }
+          ]
+        },
+        (error, result) => {
+          if (error) reject(error);
+          else resolve(result);
+        }
+      );
+
+      uploadStream.end(req.file.buffer);
+    });
+
+
+    // Generate thumbnail URLs using Cloudinary transformations
+    const thumbnails = {
+      small: cloudinary.url(uploadResult.public_id, {
+        width: 400,
+        height: 300,
+        crop: 'fill',
+        quality: 'auto',
+        fetch_format: 'auto'
+      }),
+      medium: cloudinary.url(uploadResult.public_id, {
+        width: 800,
+        height: 600,
+        crop: 'limit',
+        quality: 'auto',
+        fetch_format: 'auto'
+      }),
+      large: cloudinary.url(uploadResult.public_id, {
+        width: 1200,
+        height: 900,
+        crop: 'limit',
+        quality: 'auto',
+        fetch_format: 'auto'
+      })
+    };
 
     // Create Upload document
     const uploadDoc = await Upload.create({
-      fileId: originalFileId,
-      filename: originalFileName,
-      originalname,
-      mimeType,
-      size,
-      width: metadata.width || null,
-      height: metadata.height || null,
-      thumbnails: {
-        small: thumbnails.small || null,
-        medium: thumbnails.medium || null,
-        large: null
-      },
+      publicId: uploadResult.public_id,
+      url: uploadResult.secure_url,
+      originalname: req.file.originalname,
+      mimeType: req.file.mimetype,
+      size: req.file.size,
+      width: uploadResult.width,
+      height: uploadResult.height,
+      thumbnails,
       uploadedBy: req.userId
     });
-
-    // Build API URLs (GET endpoints)
-    const baseUrl = `${req.protocol}://${req.get('host')}/api/uploads`;
-    const urls = {
-      download: `${baseUrl}/${uploadDoc._id.toString()}`,
-      thumbnailSmall: thumbnails.small ? `${baseUrl}/${uploadDoc._id.toString()}/thumbnail/small` : null,
-      thumbnailMedium: thumbnails.medium ? `${baseUrl}/${uploadDoc._id.toString()}/thumbnail/medium` : null
-    };
 
     res.status(201).json({
       success: true,
       upload: {
         id: uploadDoc._id,
-        fileId: originalFileId,
-        filename: uploadDoc.filename,
+        publicId: uploadDoc.publicId,
+        url: uploadDoc.url,
+        thumbnails: uploadDoc.thumbnails,
         originalname: uploadDoc.originalname,
         mimeType: uploadDoc.mimeType,
         size: uploadDoc.size,
         width: uploadDoc.width,
-        height: uploadDoc.height,
-        thumbnails: uploadDoc.thumbnails,
-        urls
+        height: uploadDoc.height
       }
     });
+
   } catch (error) {
     console.error('Upload error:', error);
-    res.status(500).json({ success: false, message: 'Upload failed', error: error.message });
-  }
-};
-
-/**
- * GET /api/uploads/:id
- * Streams the original file from GridFS by Upload document id
- */
-export const serveUpload = async (req, res) => {
-  try {
-    const id = req.params.id;
-    const upload = await Upload.findById(id);
-    if (!upload) return res.status(404).json({ success: false, message: 'Upload not found' });
-
-    const fileId = upload.fileId;
-    if (!fileId) return res.status(404).json({ success: false, message: 'File bytes missing' });
-
-    const bucket = new mongoose.mongo.GridFSBucket(mongoose.connection.db, { bucketName: 'fs' });
-
-    // set caching headers
-    res.setHeader('Content-Type', upload.mimeType || 'application/octet-stream');
-    res.setHeader('Cache-Control', 'public, max-age=31536000');
-
-    const downloadStream = bucket.openDownloadStream(fileId);
-    downloadStream.on('error', (err) => {
-      console.error('GridFS download error:', err);
-      res.status(500).end();
-    });
-    downloadStream.pipe(res);
-  } catch (error) {
-    console.error('Serve upload error:', error);
-    res.status(500).json({ success: false, message: 'Error serving file' });
-  }
-};
-
-/**
- * GET /api/uploads/:id/thumbnail/:size
- * Streams the requested thumbnail (small|medium|large) if available
- */
-export const serveThumbnail = async (req, res) => {
-  try {
-    const { id, size } = req.params;
-    if (!['small', 'medium', 'large'].includes(size)) return res.status(400).json({ success: false, message: 'Invalid size' });
-
-    const upload = await Upload.findById(id);
-    if (!upload) return res.status(404).json({ success: false, message: 'Upload not found' });
-
-    const thumbId = upload.thumbnails && upload.thumbnails[size];
-    if (!thumbId) return res.status(404).json({ success: false, message: 'Thumbnail not available' });
-
-    const bucket = new mongoose.mongo.GridFSBucket(mongoose.connection.db, { bucketName: 'fs' });
-
-    res.setHeader('Content-Type', upload.mimeType || 'application/octet-stream');
-    res.setHeader('Cache-Control', 'public, max-age=31536000');
-
-    const streamThumb = bucket.openDownloadStream(thumbId);
-    streamThumb.on('error', (err) => {
-      console.error('GridFS thumbnail download error:', err);
-      res.status(500).end();
-    });
-    streamThumb.pipe(res);
-  } catch (error) {
-    console.error('Serve thumbnail error:', error);
-    res.status(500).json({ success: false, message: 'Error serving thumbnail' });
-  }
-};
-
-/**
- * PATCH /api/uploads/:id/metadata
- * Update alt text / caption / display metadata (protected)
- */
-export const updateUploadMetadata = async (req, res) => {
-  try {
-    const id = req.params.id;
-    const { alt, caption, display } = req.body;
-    const upload = await Upload.findById(id);
-    if (!upload) return res.status(404).json({ success: false, message: 'Upload not found' });
-
-    // optional: restrict updates to uploader or admin (implement as needed)
-    if (alt !== undefined) upload.alt = String(alt).slice(0, 500);
-    if (caption !== undefined) upload.caption = String(caption).slice(0, 1000);
-    if (display !== undefined && typeof display === 'object') {
-      upload.display = {
-        width: display.width || upload.display.width,
-        float: display.float || upload.display.float
-      };
+    
+    if (error.message.includes('File size too large')) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'File too large for Cloudinary' 
+      });
     }
-
-    await upload.save();
-    res.json({ success: true, upload });
-  } catch (error) {
-    console.error('Update upload metadata error:', error);
-    res.status(500).json({ success: false, message: 'Error updating metadata' });
+    
+    res.status(500).json({ 
+      success: false, 
+      message: 'Upload failed', 
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined 
+    });
   }
 };
-
-
 
 /**
  * DELETE /api/uploads/:id
- * Delete GridFS bytes and Upload doc. Only uploader or admin allowed.
- * Assumes protect middleware has set req.user and req.userId
+ * Delete from Cloudinary and remove Upload document
  */
 export const deleteUpload = async (req, res) => {
   try {
-    const id = req.params.id;
-    const upload = await Upload.findById(id);
-    if (!upload) return res.status(404).json({ success: false, message: 'Upload not found' });
+    const upload = await Upload.findById(req.params.id);
+    if (!upload) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Upload not found' 
+      });
+    }
 
+    // Check permissions
     const user = req.user;
-    if (!user) return res.status(401).json({ success: false, message: 'Not authorized' });
-
     const isOwner = upload.uploadedBy.toString() === user._id.toString();
     const isAdmin = user.role === 'admin';
-    if (!isOwner && !isAdmin) return res.status(403).json({ success: false, message: 'Forbidden' });
-
-    const bucket = new mongoose.mongo.GridFSBucket(mongoose.connection.db, { bucketName: 'fs' });
-
-    // delete original file
-    if (upload.fileId) {
-      try { await bucket.delete(upload.fileId); } catch (err) { console.warn('Failed to delete original GridFS file:', err.message || err); }
+    
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Forbidden' 
+      });
     }
 
-    // delete thumbnails if present
-    const thumbs = upload.thumbnails || {};
-    for (const sizeKey of ['small', 'medium', 'large']) {
-      const fid = thumbs[sizeKey];
-      if (fid) {
-        try { await bucket.delete(fid); } catch (err) { console.warn(`Failed to delete thumbnail ${sizeKey}:`, err.message || err); }
-      }
+    // Delete from Cloudinary
+    try {
+      await cloudinary.uploader.destroy(upload.publicId);
+    } catch (cloudinaryError) {
+      console.warn('Cloudinary deletion failed:', cloudinaryError);
+      // Continue with database deletion even if Cloudinary fails
     }
 
-    // finally remove the Upload doc
-    await Upload.findByIdAndDelete(id);
+    // Remove from database
+    await Upload.findByIdAndDelete(req.params.id);
 
-    res.json({ success: true, message: 'Upload deleted' });
+    res.json({ 
+      success: true, 
+      message: 'Upload deleted successfully' 
+    });
+
   } catch (error) {
-    console.error('deleteUpload error:', error);
-    res.status(500).json({ success: false, message: 'Error deleting upload' });
+    console.error('Delete upload error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Error deleting upload' 
+    });
   }
+};
+
+// Remove GridFS-related functions since we're using Cloudinary
+export const serveUpload = async (req, res) => {
+  return res.status(410).json({ 
+    success: false, 
+    message: 'This endpoint is no longer available. Use Cloudinary URLs directly.' 
+  });
+};
+
+export const serveThumbnail = async (req, res) => {
+  return res.status(410).json({ 
+    success: false, 
+    message: 'This endpoint is no longer available. Use Cloudinary thumbnail URLs directly.' 
+  });
 };

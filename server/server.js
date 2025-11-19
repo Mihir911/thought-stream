@@ -2,13 +2,6 @@ import express from "express";
 import mongoose from "mongoose";
 import cors from "cors";
 import dotenv from "dotenv";
-import authRoutes from './routes/auth.js';
-import userRoutes from './routes/userRoutes.js'
-import blogRoutes from './routes/blogRoutes.js';
-import path from 'path';
-import uploadRoutes from './routes/uploadRoutes.js';
-import draftRoutes from './routes/draftRoutes.js';
-
 
 //load environment variables
 dotenv.config();
@@ -20,9 +13,6 @@ const PORT = process.env.PORT;
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 
-//serve uploaded files
-app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
-
 //health check route
 app.get('/api/health', (req, res) => {
     res.json({
@@ -31,6 +21,24 @@ app.get('/api/health', (req, res) => {
         timestamp: new Date().toISOString()
     });
 });
+
+
+
+
+
+import authRoutes from './routes/auth.js';
+import userRoutes from './routes/userRoutes.js'
+import blogRoutes from './routes/blogRoutes.js';
+import path from 'path';
+import uploadRoutes from './routes/uploadRoutes.js';
+import draftRoutes from './routes/draftRoutes.js';
+
+
+
+
+//serve uploaded files
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+
 
 
 //routes
@@ -46,6 +54,13 @@ const connectDB = async () => {
         const conn = await mongoose.connect(process.env.MONGODB_URI);
         console.log(`MongoDB Connected: ${conn.connection.host}`);
 
+
+        // Initialize GridFS bucket
+        // const db = mongoose.connection.db;
+        // app.locals.bucket = new mongoose.mongo.GridFSBucket(db, {
+        //     bucketName: 'uploads'
+        // });
+
     } catch (error) {
         console.error('Database connection error: ', error.message);
         process.exit(1);
@@ -59,19 +74,19 @@ app.use((error, req, res, next) => {
     res.status(500).json({
         success: false,
         message: 'Internal server error',
-        error: process.env.NODE_ENV === 'development' ? error.message : error
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
 });
 
 //404 hander
 app.use(
     (req, res) => {
-    res.status(404).json({
-        success: false,
-        message: "API route not found",
-        //path: req.originalUrl
+        res.status(404).json({
+            success: false,
+            message: "API route not found",
+            //path: req.originalUrl
+        });
     });
-});
 
 //server startup
 const startServer = async () => {
@@ -83,15 +98,15 @@ const startServer = async () => {
 
     });
 
-    //new technologia
-    process.on('SIGTERM', () => {
-        console.log('SIGTERM recieved, shutting down gracefully');
-        server.close(() => {
-            mongoose.connection.close();
-            process.exit(0);
-        });
+ //new technologia
+    // process.on('SIGTERM', () => {
+    //     console.log('SIGTERM recieved, shutting down gracefully');
+    //     server.close(() => {
+    //         mongoose.connection.close();
+    //         process.exit(0);
+    //     });
 
-    });
+    // });
 
     // new technologia
     process.on('SIGINT', () => {

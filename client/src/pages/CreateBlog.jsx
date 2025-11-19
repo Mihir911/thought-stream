@@ -1,587 +1,452 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
+import { 
+  Save, 
+  Eye, 
+  Image as ImageIcon, 
+  Type, 
+  Clock, 
+  Tag,
+  X,
+  AlertCircle,
+  CheckCircle2,
+  Upload
+} from 'lucide-react';
 import api from '../utils/api';
-import { Image, Paperclip, Trash, Save, ArrowUpRight } from 'lucide-react';
-import ImageUploader from '../components/editor/ImageUploader';
-import RichEditor from '../components/editor/RichEditor';
-import { captureOwnerStack } from 'react';
-/**
- * CreateBlog - polished editor page with:
- * - Cover image (URL or upload -> base64 preview)
- * - Categories (chips) and tags (chip input)
- * - Markdown editor + live preview (simple markdown support)
- * - Autosave to localStorage + manual "Save Draft" (sends isPublished=false)
- * - Publish button (isPublished=true)
- * - Keyboard shortcut Cmd/Ctrl+S to save draft
- * Usage:
- * - Route: /create (Header already links to /create)
- * - Requires authentication (server will validate token)
- */
 
-const LOCAL_DRAFT_KEY = 'blogspace:draft:v2';
-const DEFAULT_CATEGORIES = [
-  'Technology', 'Programming', 'Design', 'Lifestyle',
-  'Travel', 'Food', 'Health', 'Business', 'Education', 'Science'
-];
+const CreateBlog = () => {
+  const navigate = useNavigate();
+  const { token } = useSelector(state => state.auth);
+  const [loading, setLoading] = useState(false);
+  const [previewMode, setPreviewMode] = useState(false);
+  const [alert, setAlert] = useState({ show: false, type: '', message: '' });
 
+  // Form state
+  const [formData, setFormData] = useState({
+    title: '',
+    content: '',
+    categories: [],
+    tags: [],
+    coverImage: '',
+    isPublished: true
+  });
 
-// function simpleMarkdownToHtml(md = '') {
-//   let html = md
-//     .replace(/```([\s\S]*?)```/g, (m, p1) => `<pre class="rounded bg-slate-100 p-3 overflow-auto"><code>${escapeHtml(p1)}</code></pre>`)
-//     .replace(/^###### (.*$)/gim, '<h6 class="text-slate-700">$1</h6>')
-//     .replace(/^##### (.*$)/gim, '<h5 class="text-slate-700">$1</h5>')
-//     .replace(/^#### (.*$)/gim, '<h4 class="text-slate-700">$1</h4>')
-//     .replace(/^### (.*$)/gim, '<h3 class="text-slate-800">$1</h3>')
-//     .replace(/^## (.*$)/gim, '<h2 class="text-slate-900">$1</h2>')
-//     .replace(/^# (.*$)/gim, '<h1 class="text-slate-900 text-2xl">$1</h1>')
-//     .replace(/\*\*(.*?)\*\*/gim, '<strong>$1</strong>')
-//     .replace(/\*(.*?)\*/gim, '<em>$1</em>')
-//     .replace(/!\[([^\]]*)\]\(([^)]+)\)/gim, '<img alt="$1" src="$2" class="max-w-full rounded" />')
-//     .replace(/\[([^\]]+)\]\(([^)]+)\)/gim, '<a class="text-sky-600 hover:underline" href="$2" target="_blank" rel="noreferrer noopener">$1</a>')
-//     .replace(/^\s*[-*] (.*)/gim, '<li>$1</li>')
-//     .replace(/(<li>[\s\S]*?<\/li>)/gim, '<ul class="list-disc pl-6 mb-2">$1</ul>')
-//     .replace(/\n{2,}/gim, '</p><p>')
-//     .replace(/^(?!<h|<ul|<pre|<img|<p|<blockquote)(.+)$/gim, '<p>$1</p>');
+  const [wordCount, setWordCount] = useState(0);
+  const [readTime, setReadTime] = useState(0);
 
-//   if (!html.startsWith('<p') && !html.startsWith('<h') && !html.startsWith('<pre') && !html.startsWith('<ul') && !html.startsWith('<img')) {
-//     html = `<p>${html}</p>`;
-//   }
-//   return html;
-// }
-
-// function escapeHtml(unsafe = '') {
-//   return unsafe.replace(/[&<"']/g, function (m) {
-//     switch (m) {
-//       case '&': return '&amp;';
-//       case '<': return '&lt;';
-//       case '"': return '&quot;';
-//       default: return '&#039;';
-//     }
-//   });
-// }
-
-// const TagInput = ({ tags, setTags }) => {
-//   const [value, setValue] = useState('');
-//   const inputRef = useRef(null);
-
-//   const addTag = (t) => {
-//     const trimmed = t.trim();
-//     if (!trimmed) return;
-//     if (!tags.includes(trimmed)) {
-//       setTags([...tags, trimmed]);
-//     }
-//     setValue('');
-//     inputRef.current?.focus();
-//   };
-
-//   const removeTag = (t) => setTags(tags.filter(x => x !== t));
-
-//   const onKeyDown = (e) => {
-  //     if (e.key === 'Enter' || e.key === ',') {
-//       e.preventDefault();
-//       addTag(value);
-//     } else if (e.key === 'Backspace' && !value) {
-//       setTags(tags.slice(0, -1));
-//     }
-//   };
-
-//   return (
-//     <div>
-//       <div className="flex flex-wrap gap-2 mb-2">
-//         {tags.map(t => (
-//           <span key={t} className="inline-flex items-center gap-2 bg-slate-100 text-slate-700 px-3 py-1 rounded-full text-sm">
-//             {t}
-//             <button type="button" onClick={() => removeTag(t)} className="text-slate-400 hover:text-red-500">
-//               <Trash className="h-3 w-3" />
-//             </button>
-//           </span>
-//         ))}
-//       </div>
-//       <input
-//         ref={inputRef}
-//         value={value}
-//         onChange={(e) => setValue(e.target.value)}
-//         onKeyDown={onKeyDown}
-//         placeholder="Type a tag and press Enter"
-//         className="w-full border border-slate-200 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300"
-//       />
-//     </div>
-//   );
-// };
-
-// const handleSaveDraft = async () => {
-//   if (!token) {
-//     setError('You must be logged in to save drafts.');
-//     return;
-//   }
-//   setIsSaving(true);
-//   setError('');
-//   try {
-//     const payload = { ...commonPayload(), isPublished: false };
-//     await api.post('/blogs', payload);
-//     setSuccessMsg('Draft saved to server');
-//     setTimeout(() => setSuccessMsg(''), 1500);
-//     localStorage.removeItem(LOCAL_DRAFT_KEY);
-//   } catch (err) {
-//     console.error('Save draft error', err);
-//     setError(err?.response?.data?.message || 'Failed to save draft');
-//   } finally {
-//     setIsSaving(false);
-//   }
-// };
-
-// const handlePublish = async () => {
-//   if (!validate()) return;
-//   if (!token) {
-//     setError('You must be logged in to publish.');
-//     return;
-//   }
-//   setIsPublishing(true);
-//   setError('');
-//   try {
-//     const payload = { ...commonPayload(), isPublished: true };
-//     const res = await api.post('/blogs', payload);
-//     const created = res.data.blog;
-//     localStorage.removeItem(LOCAL_DRAFT_KEY);
-//     if (created && created._id) {
-//       navigate(`/blogs/${created._id}`);
-//     } else {
-//       setSuccessMsg('Published successfully');
-//     }
-//   } catch (err) {
-//     console.error('Publish error', err);
-//     setError(err?.response?.data?.message || 'Failed to publish');
-//   } finally {
-  //     setIsPublishing(false);
-  //   }
-  // };
-
-  // useEffect(() => {
-    //   const onKey = (e) => {
-  //     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
-  //       e.preventDefault();
-  //       handleSaveDraft();
-  //     }
-  //   };
-  //   window.addEventListener('keydown', onKey);
-  //   return () => window.removeEventListener('keydown', onKey);
-  //   // eslint-disable-next-line
-  // }, [title, coverImage, content, selectedCategories, tags]);
-
-
-  // const handleCoverFile = (file) => {
-  //   if (!file) return;
-  //   const reader = new FileReader();
-  //   reader.onload = (e) => {
-  //     setCoverPreview(e.target.result);
-  //     setCoverImage(e.target.result);
-  //   };
-  //   reader.readAsDataURL(file);
-  // };
-
-
-  // const toggleCategory = (c) => {
-  //   setSelectedCategories(prev => prev.includes(c) ? prev.filter(x => x !== c) : [...prev, c]);
-  // };
-
-  // const validate = () => {
-  //   if (!title || title.trim().length < 5) {
-  //     setError('Please provide a title (min 5 characters).');
-  //     return false;
-  //   }
-  //   if (!content || content.trim().length < 50) {
-  //     setError('Content is too short (min 50 characters).');
-  //     return false;
-  //   }
-  //   return true;
-  // };
-
-
-
-
-
-
-  const CreateBlog = () => {
-    const navigate = useNavigate();
-  const user = useSelector(s => s.auth?.user);
-  const token = useSelector(s => s.auth?.token) || localStorage.getItem('token');
-
-  const [title, setTitle] = useState('');
-  const [coverUploadId, setCoverUploadId] = useState(null);
-  const [coverPreview, setCoverPreview] = useState('');
-  const [contentBlocks, setContentBlocks] = useState([]);
-  const [htmlPreview, setHtmlPreview] = useState('');
-  const [tags, setTags] = useState([]);
-  const [isPublishing, setIsPublishing] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [draftId, setDraftId] = useState(null);
-  const [selectedCategories, setSelectedCategories] = useState([]);
-  const [error, setError] = useState('');
-  const [successMsg, setSuccessMsg] = useState('');
-
-  const autosaveTimer = useRef(null);
+  const categoriesList = [
+    'Technology', 'Programming', 'Design', 'Lifestyle', 'Travel',
+    'Food', 'Health', 'Business', 'Education', 'Science',
+    'Finance', 'Entertainment', 'Sports', 'Art', 'Music'
+  ];
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(LOCAL_DRAFT_KEY);
-      if (raw) {
-        const d = JSON.parse(raw);
-        setTitle(d.title || '');
-        setCoverPreview(d.coverPreview || '');
-        setContentBlocks(d.contentBlocks || []);
-        setTags(d.tags || []);
-        setSelectedCategories(d.categories || []);
-      }
-    } catch (err) { /* ignore */ }
-  }, []);
-
-
-  useEffect(() => {
-    if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
-    autosaveTimer.current = setTimeout(() => {
-      const payload = { title, coverPreview, contentBlocks, categories: selectedCategories, tags };
-      localStorage.setItem(LOCAL_DRAFT_KEY, JSON.stringify(payload));
-      setSuccessMsg('Draft saved locally');
-      setTimeout(() => setSuccessMsg(''), 1000);
-      // also auto-save to server (create/update draft)
-      autoSaveToServer(payload);
-    }, 2500);
-    return () => { if (autosaveTimer.current) clearTimeout(autosaveTimer.current); };
-    // eslint-disable-next-line
-  }, [title, coverPreview, contentBlocks, selectedCategories, tags]);
-
-
-
-
-const autoSaveToServer = useCallback(async (payload) => {
-    if (!token) return; // require auth for server-side draft
-    try {
-      if (!draftId) {
-        // create
-        const res = await api.post('/drafts', {
-          title: payload.title,
-          contentBlocks: payload.contentBlocks,
-          coverUpload: coverUploadId,
-          categories: payload.categories,
-          tags: payload.tags,
-          isPublished: false
-        });
-        if (res?.data?.draft?._id) setDraftId(res.data.draft._id);
-      } else {
-        // update
-        await api.put(`/drafts/${draftId}`, {
-          title: payload.title,
-          contentBlocks: payload.contentBlocks,
-          coverUpload: coverUploadId,
-          categories: payload.categories,
-          tags: payload.tags,
-          isPublished: false
-        });
-      }
-    } catch (err) {
-      // don't surface autosave errors aggressively
-      console.debug('Auto-save draft error', err);
+    if (!token) {
+      navigate('/login');
+      return;
     }
-  }, [token, draftId, coverUploadId]);
 
+    // Calculate word count and read time
+    const words = formData.content.trim().split(/\s+/).filter(word => word.length > 0);
+    setWordCount(words.length);
+    setReadTime(Math.max(1, Math.ceil(words.length / 200)));
+  }, [formData.content, token, navigate]);
 
-const handleCoverFile = async (file) => {
+  const showAlert = (type, message) => {
+    setAlert({ show: true, type, message });
+    setTimeout(() => setAlert({ show: false, type: '', message: '' }), 5000);
+  };
+
+  const handleInputChange = (field, value) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const handleCategoryToggle = (category) => {
+    setFormData(prev => ({
+      ...prev,
+      categories: prev.categories.includes(category)
+        ? prev.categories.filter(c => c !== category)
+        : [...prev.categories, category]
+    }));
+  };
+
+  const handleTagAdd = (e) => {
+    if (e.key === 'Enter' && e.target.value.trim()) {
+      const newTag = e.target.value.trim();
+      if (!formData.tags.includes(newTag)) {
+        setFormData(prev => ({
+          ...prev,
+          tags: [...prev.tags, newTag]
+        }));
+      }
+      e.target.value = '';
+    }
+  };
+
+  const removeTag = (tagToRemove) => {
+    setFormData(prev => ({
+      ...prev,
+      tags: prev.tags.filter(tag => tag !== tagToRemove)
+    }));
+  };
+
+  const handleImageUpload = async (e) => {
+    const file = e.target.files[0];
     if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      showAlert('error', 'Please select an image file');
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      showAlert('error', 'Image size should be less than 10MB');
+      return;
+    }
+
     try {
-      const form = new FormData();
-      form.append('file', file);
-      const res = await api.post('/uploads', form, {
+      setLoading(true);
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await api.post('/uploads', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
-      const upload = res?.data?.upload;
-      if (upload) {
-        setCoverPreview(upload.urls.thumbnailMedium || upload.urls.download);
-        setCoverUploadId(String(upload.id));
+
+      if (response.data.upload) {
+        handleInputChange('coverImage', response.data.upload.url);
+        showAlert('success', 'Cover image uploaded successfully!');
       }
-    } catch (err) {
-      console.error('Cover upload failed', err);
-      setError('Cover upload failed');
+    } catch (error) {
+      console.error('Upload failed:', error);
+      showAlert('error', 'Failed to upload image. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
-
-  const toggleCategory = (c) => {
-    setSelectedCategories(prev => prev.includes(c) ? prev.filter(x => x !== c) : [...prev, c]);
-  };
-
-  const validate = () => {
-    if (!title || title.trim().length < 5) {
-      setError('Please provide a title (min 5 characters).');
+  const validateForm = () => {
+    if (!formData.title.trim()) {
+      showAlert('error', 'Please enter a title for your story');
       return false;
     }
-    // require some content in blocks
-    const textLength = contentBlocks.reduce((acc, b) => {
-      const t = (b.data && (b.data.text || b.data.code || b.data.caption)) || '';
-      return acc + String(t).trim().length;
-    }, 0);
-    if (textLength < 20) {
-      setError('Content is too short (add more text).');
+
+    if (formData.title.length < 5) {
+      showAlert('error', 'Title should be at least 5 characters long');
       return false;
     }
+
+    if (!formData.content.trim()) {
+      showAlert('error', 'Please write some content for your story');
+      return false;
+    }
+
+    if (wordCount < 50) {
+      showAlert('error', 'Your story should be at least 50 words long');
+      return false;
+    }
+
+    if (formData.categories.length === 0) {
+      showAlert('error', 'Please select at least one category');
+      return false;
+    }
+
     return true;
   };
 
+  const handleSaveDraft = async () => {
+    if (!validateForm()) return;
 
-const handleSaveDraft = async () => {
-    if (!token) {
-      setError('You must be logged in to save drafts.');
-      return;
-    }
-    setIsSaving(true);
-    setError('');
     try {
-      const payload = {
-        title,
-        contentBlocks,
-        coverUpload: coverUploadId,
-        categories: selectedCategories,
-        tags,
-        isPublished: false
-      };
-      if (!draftId) {
-        const res = await api.post('/drafts', payload);
-        if (res?.data?.draft?._id) {
-          setDraftId(res.data.draft._id);
-          setSuccessMsg('Draft created');
-        }
-      } else {
-        await api.put(`/drafts/${draftId}`, payload);
-        setSuccessMsg('Draft updated');
-      }
-      setTimeout(() => setSuccessMsg(''), 1500);
-      localStorage.removeItem(LOCAL_DRAFT_KEY);
-    } catch (err) {
-      console.error('Save draft error', err);
-      setError(err?.response?.data?.message || 'Failed to save draft');
+      setLoading(true);
+      const draftData = { ...formData, isPublished: false };
+      await api.post('/drafts', draftData);
+      showAlert('success', 'Draft saved successfully!');
+    } catch (error) {
+      console.error('Save draft failed:', error);
+      showAlert('error', 'Failed to save draft. Please try again.');
     } finally {
-      setIsSaving(false);
+      setLoading(false);
     }
   };
 
+  const handlePublish = async () => {
+    if (!validateForm()) return;
 
-const handlePublish = async () => {
-    if (!validate()) return;
-    if (!token) {
-      setError('You must be logged in to publish.');
-      return;
-    }
-    setIsPublishing(true);
-    setError('');
     try {
-      const payload = {
-        title: title.trim(),
-        contentBlocks: contentBlocks,
-        categories: selectedCategories,
-        tags,
-        coverUpload: coverUploadId,
-        isPublished: true
-      };
-      const res = await api.post('/blogs', payload);
-      const created = res.data.blog;
-      // cleanup local and server draft
-      if (draftId) {
-        try { await api.delete(`/drafts/${draftId}`); } catch (_) {}
+      setLoading(true);
+      const response = await api.post('/blogs', formData);
+      
+      if (response.data.success) {
+        showAlert('success', 'Your story has been published successfully!');
+        setTimeout(() => {
+          navigate(`/blogs/${response.data.blog._id}`);
+        }, 2000);
       }
-      localStorage.removeItem(LOCAL_DRAFT_KEY);
-      if (created && created._id) navigate(`/blogs/${created._id}`);
-      else setSuccessMsg('Published successfully');
-    } catch (err) {
-      console.error('Publish error', err);
-      setError(err?.response?.data?.message || 'Failed to publish');
+    } catch (error) {
+      console.error('Publish failed:', error);
+      showAlert('error', 'Failed to publish story. Please try again.');
     } finally {
-      setIsPublishing(false);
+      setLoading(false);
     }
   };
 
-
-
-  const insertAtCursor = useCallback((text) => {
-    const el = editorRef.current;
-    if (!el) {
-      setContent(prev => prev + text);
-      return;
-    }
-    const start = el.selectionStart ?? content.length;
-    const end = el.selectionEnd ?? content.length;
-    const newVal = content.slice(0, start) + text + content.slice(end);
-    setContent(newVal);
-    // restore focus and set caret after inserted text
-    requestAnimationFrame(() => {
-      el.focus();
-      const pos = start + text.length;
-      el.selectionStart = el.selectionEnd = pos;
-    });
-  }, [content]);
-
-
-  const onImageUpload = (url, originalName) => {
-    let alt = originalName || 'image';
-    try { alt = window.prompt('Alt text (for accessibility)', originalName) || originalName; } catch (err) { }
-    let caption = "";
-    try {
-      caption = window.prompt('Optional caption (leave empty to skip)') || '';
-    } catch (error) {}
-
-    const captionMd = caption ? `\n*${caption}*` : '';
-    const md = `\n\n![${alt}](${url})${captionMd}\n\n`;
-    insertAtCursor(md);
-    setSuccessMsg('Image inserted');
-    setTimeout(() => setSuccessMsg(''), 1200);
-  };
-
-
-  const commonPayload = () => ({
-    title: title.trim(),
-    content: content.trim(),
-    categories: selectedCategories,
-    tags,
-    coverImage: coverImage || '',
-  });
-
+  if (!token) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <Type className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Sign In Required</h2>
+          <p className="text-gray-600 mb-6">Please sign in to create a story</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-slate-50 py-12">
-      <div className="max-w-6xl mx-auto px-6">
-        <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
-          {/* Top toolbar */}
-          <div className="flex items-center justify-between gap-4 p-4 border-b border-slate-100">
-            <div>
-              <div className="text-slate-800 font-semibold">New post</div>
-              <div className="text-sm text-slate-500">Compose your story</div>
+    <div className="min-h-screen bg-gray-50">
+      {/* Alert */}
+      {alert.show && (
+        <div className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg border-l-4 ${
+          alert.type === 'success' 
+            ? 'bg-green-50 border-green-400 text-green-700' 
+            : 'bg-red-50 border-red-400 text-red-700'
+        }`}>
+          <div className="flex items-center space-x-2">
+            {alert.type === 'success' ? (
+              <CheckCircle2 className="h-5 w-5" />
+            ) : (
+              <AlertCircle className="h-5 w-5" />
+            )}
+            <span className="font-medium">{alert.message}</span>
+          </div>
+        </div>
+      )}
+
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Create New Story</h1>
+          <p className="text-gray-600">Share your thoughts, ideas, and stories with the world</p>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+          {/* Main Content */}
+          <div className="lg:col-span-3 space-y-6">
+            {/* Title Input */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <label className="block text-sm font-medium text-gray-700 mb-3">
+                Story Title
+              </label>
+              <input
+                type="text"
+                value={formData.title}
+                onChange={(e) => handleInputChange('title', e.target.value)}
+                placeholder="Write a compelling title that captures attention..."
+                className="w-full px-4 py-3 text-lg font-medium border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                maxLength={200}
+              />
+              <div className="flex items-center justify-between mt-2 text-sm text-gray-500">
+                <span>This appears in feeds and search results</span>
+                <span>{formData.title.length}/200</span>
+              </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <label className="flex items-center gap-2 bg-white border border-slate-200 px-3 py-2 rounded-md cursor-pointer hover:shadow-sm">
-                <Image className="h-4 w-4 text-sky-600" />
-                <input type="file" accept="image/*" onChange={(e) => handleCoverFile(e.target.files?.[0])} className="hidden" />
-                <span className="text-xs text-slate-600">Upload cover</span>
-              </label>
+            {/* Content Editor */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+              <div className="border-b border-gray-200">
+                <div className="flex">
+                  <button
+                    onClick={() => setPreviewMode(false)}
+                    className={`px-6 py-4 font-medium text-sm border-b-2 transition-colors ${
+                      !previewMode 
+                        ? 'border-primary-500 text-primary-600' 
+                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    Write
+                  </button>
+                  <button
+                    onClick={() => setPreviewMode(true)}
+                    className={`px-6 py-4 font-medium text-sm border-b-2 transition-colors ${
+                      previewMode 
+                        ? 'border-primary-500 text-primary-600' 
+                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    Preview
+                  </button>
+                </div>
+              </div>
 
-              <ImageUploader onUploaded={(url, name) => {
-                // Optionally insert image link into editor when used from toolbar
-                setCoverPreview(url);
-              }} buttonText="Insert image into content" />
+              <div className="p-6">
+                {!previewMode ? (
+                  <textarea
+                    value={formData.content}
+                    onChange={(e) => handleInputChange('content', e.target.value)}
+                    placeholder="Start writing your story... Share your thoughts, ideas, and experiences. You can use markdown for formatting."
+                    rows={20}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none font-sans text-gray-700 leading-relaxed"
+                  />
+                ) : (
+                  <div className="prose prose-lg max-w-none min-h-[400px] p-4 border border-gray-200 rounded-lg">
+                    {formData.content ? (
+                      <div className="whitespace-pre-wrap">{formData.content}</div>
+                    ) : (
+                      <p className="text-gray-400 text-center py-20">Start writing to see preview...</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
 
-              <button
-                onClick={handleSaveDraft}
-                disabled={isSaving}
-                className="inline-flex items-center gap-2 px-3 py-2 rounded-md bg-white border border-slate-200 hover:shadow-sm"
-                title="Save draft"
-              >
-                <Save className="h-4 w-4 text-slate-600" />
-                <span className="text-sm text-slate-700">{isSaving ? 'Saving...' : 'Save draft'}</span>
-              </button>
-
-              <button
-                onClick={handlePublish}
-                disabled={isPublishing}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-sky-600 text-white hover:bg-sky-700 shadow"
-              >
-                <ArrowUpRight className="h-4 w-4" />
-                <span className="text-sm">{isPublishing ? 'Publishing...' : 'Publish'}</span>
-              </button>
+            {/* Writing Stats */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="grid grid-cols-3 gap-4 text-center">
+                <div>
+                  <div className="text-2xl font-bold text-primary-600">{wordCount}</div>
+                  <div className="text-sm text-gray-600">Words</div>
+                </div>
+                <div>
+                  <div className="text-2xl font-bold text-primary-600">{readTime}</div>
+                  <div className="text-sm text-gray-600">Minutes Read</div>
+                </div>
+                <div>
+                  <div className="text-2xl font-bold text-primary-600">{formData.content.length}</div>
+                  <div className="text-sm text-gray-600">Characters</div>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Left column */}
-            <aside className="lg:col-span-1 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Title</label>
-                <input
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Intriguing title that captures attention"
-                  className="w-full border border-slate-200 rounded px-3 py-2 text-lg focus:outline-none focus:ring-2 focus:ring-sky-300"
-                />
-              </div>
+          {/* Sidebar */}
+          <div className="space-y-6">
+            {/* Cover Image */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <label className="block text-sm font-medium text-gray-700 mb-3">
+                Cover Image
+              </label>
+              
+              {formData.coverImage ? (
+                <div className="relative group">
+                  <img 
+                    src={formData.coverImage} 
+                    alt="Cover preview" 
+                    className="w-full h-48 object-cover rounded-lg"
+                  />
+                  <button
+                    onClick={() => handleInputChange('coverImage', '')}
+                    className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : (
+                <label className="block cursor-pointer">
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg h-48 flex flex-col items-center justify-center text-gray-400 hover:border-primary-400 hover:text-primary-400 transition-colors">
+                    <Upload className="h-8 w-8 mb-2" />
+                    <span className="text-sm font-medium">Upload Cover Image</span>
+                    <span className="text-xs mt-1">Recommended: 1200×600px</span>
+                  </div>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    className="hidden"
+                  />
+                </label>
+              )}
+            </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Cover preview</label>
-                {coverPreview ? (
-                  <div className="relative">
-                    <img src={coverPreview} alt="cover preview" className="w-full h-40 object-cover rounded" />
-                    <button onClick={() => { setCoverUploadId(null); setCoverPreview(''); }} className="absolute top-2 right-2 bg-white rounded-full p-1 shadow">
-                      <Trash className="h-4 w-4 text-red-500" />
+            {/* Categories */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <label className="block text-sm font-medium text-gray-700 mb-3">
+                Categories
+              </label>
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {categoriesList.map(category => (
+                  <label key={category} className="flex items-center space-x-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.categories.includes(category)}
+                      onChange={() => handleCategoryToggle(category)}
+                      className="rounded border-gray-300 text-primary-500 focus:ring-primary-400"
+                    />
+                    <span className="text-sm text-gray-700">{category}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Tags */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <label className="block text-sm font-medium text-gray-700 mb-3">
+                Tags
+              </label>
+              <div className="flex flex-wrap gap-2 mb-3">
+                {formData.tags.map(tag => (
+                  <span 
+                    key={tag} 
+                    className="inline-flex items-center px-3 py-1 bg-primary-100 text-primary-700 rounded-full text-sm"
+                  >
+                    {tag}
+                    <button
+                      onClick={() => removeTag(tag)}
+                      className="ml-2 hover:text-primary-900"
+                    >
+                      <X className="h-3 w-3" />
                     </button>
-                  </div>
-                ) : (
-                  <div className="border border-dashed border-slate-200 rounded h-40 flex items-center justify-center text-slate-400">
-                    No cover image
-                  </div>
-                )}
-                <div className="text-xs text-slate-500 mt-2">Tip: Use a wide image (1200x600) for best results.</div>
+                  </span>
+                ))}
+              </div>
+              <input
+                type="text"
+                placeholder="Type a tag and press Enter"
+                onKeyDown={handleTagAdd}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              />
+            </div>
+
+            {/* Action Buttons */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="space-y-3">
+                <button
+                  onClick={handleSaveDraft}
+                  disabled={loading}
+                  className="w-full flex items-center justify-center space-x-2 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  <Save className="h-4 w-4" />
+                  <span>Save Draft</span>
+                </button>
+                
+                <button
+                  onClick={handlePublish}
+                  disabled={loading}
+                  className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-primary-500 text-white rounded-lg font-medium hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  <Eye className="h-4 w-4" />
+                  <span>{loading ? 'Publishing...' : 'Publish Story'}</span>
+                </button>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Categories</label>
-                <div className="flex flex-wrap gap-2">
-                  {DEFAULT_CATEGORIES.map(c => {
-                    const active = selectedCategories.includes(c);
-                    return (
-                      <button
-                        key={c}
-                        onClick={() => toggleCategory(c)}
-                        className={`px-3 py-1 rounded-full text-sm ${active ? 'bg-sky-600 text-white' : 'bg-slate-100 text-slate-700'}`}
-                      >
-                        {c}
-                      </button>
-                    );
-                  })}
+              {/* Quick Stats */}
+              <div className="mt-4 pt-4 border-t border-gray-200">
+                <div className="flex items-center justify-between text-sm text-gray-600">
+                  <div className="flex items-center space-x-1">
+                    <Type className="h-4 w-4" />
+                    <span>{wordCount} words</span>
+                  </div>
+                  <div className="flex items-center space-x-1">
+                    <Clock className="h-4 w-4" />
+                    <span>{readTime} min read</span>
+                  </div>
                 </div>
               </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Tags</label>
-                <TagInput tags={tags} setTags={setTags} />
-              </div>
-
-              <div className="text-xs text-slate-500">
-                Drafts are autosaved locally and synced with server drafts (when logged in). Publishing will make your post visible.
-              </div>
-            </aside>
-
-            {/* Editor + preview */}
-            <section className="lg:col-span-2 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Editor</label>
-                <RichEditor
-                  initialContentBlocks={contentBlocks}
-                  onChange={({ contentBlocks: cb, html }) => {
-                    setContentBlocks(cb || []);
-                    setHtmlPreview(html || '');
-                  }}
-                />
-              </div>
-
-              <div className="flex items-center justify-between gap-4">
-                <div className="text-sm text-slate-500">{successMsg || 'Autosave active'}</div>
-                <div className="flex items-center gap-3">
-                  <button type="button" onClick={() => {
-                    localStorage.removeItem(LOCAL_DRAFT_KEY);
-                    setTitle(''); setContentBlocks([]); setCoverUploadId(null); setCoverPreview(''); setSelectedCategories([]); setTags([]);
-                    setSuccessMsg('Local draft cleared');
-                    setTimeout(() => setSuccessMsg(''), 1200);
-                  }} className="px-3 py-2 rounded-md bg-white border border-slate-200 hover:shadow-sm text-sm">Clear local draft</button>
-                  <button onClick={handleSaveDraft} className="px-3 py-2 rounded-md bg-white border border-slate-200 hover:shadow-sm text-sm">Save draft</button>
-                  <button onClick={handlePublish} className="px-4 py-2 rounded-md bg-sky-600 text-white hover:bg-sky-700 text-sm">{isPublishing ? 'Publishing...' : 'Publish'}</button>
-                </div>
-              </div>
-
-              {error && <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded p-3">{error}</div>}
-
-              {/* Live preview */}
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Live preview</label>
-                <div className="prose max-w-none border border-slate-100 rounded p-4 h-full overflow-auto bg-white" dangerouslySetInnerHTML={{ __html: htmlPreview || '<p>Nothing to preview</p>' }} />
-              </div>
-            </section>
+            </div>
           </div>
         </div>
       </div>

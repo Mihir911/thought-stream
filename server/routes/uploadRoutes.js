@@ -2,7 +2,7 @@ import express from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
-import { uploadImage, serveUpload, serveThumbnail, updateUploadMetadata, deleteUpload } from '../controllers/uploadController.js';
+import { uploadImage, serveUpload, serveThumbnail, deleteUpload } from '../controllers/uploadController.js';
 import { protect } from '../middleware/auth.js';
 import { uploadRateLimiter } from '../middleware/rateLimiter.js';
 import { ensureUploaderOrAdmin } from '../middleware/permission.js';
@@ -27,7 +27,7 @@ router.get('/:id', serveUpload);
 router.get('/:id/thumbnail/:size', serveThumbnail);
 
 // PATCH metadata (alt/caption/display)
-router.patch('/:id/metadata', protect, updateUploadMetadata);
+// router.patch('/:id/metadata', protect, updateUploadMetadata);
 
 //delete upload (protected; only owner or admin)
 router.delete('/:id', protect, ensureUploaderOrAdmin, deleteUpload);

@@ -5,19 +5,31 @@ import BlogCard from "./BlogCard";
 const RelatedPosts = ({ blogId }) => {
     const [related, setRelated] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
 
     useEffect(() => {
         if (!blogId) return;
-        setLoading(true);
-        api.get(`/blogs/${blogId}/related`).then(res => {
-            setRelated(res.data.relatedBlogs || res.data.related || []);
-        }).catch(err => {
-            console.error('Related fetch error', err);
+        
+        const fetchRelated = async () => {
+            try {
+                setLoading(true);
+                setError(null);
+                const res = await api.get(`/blogs/${blogId}/related`);
+                setRelated(res.data.relatedBlogs || []);
+            } catch (err) {
+                console.error('Related fetch error', err);
+                setError('Failed to load related posts');
+                setRelated([]); // Set empty array on error
+            } finally {
+                setLoading(false);
+            }
+        };
 
-        }).finally(() => setLoading(false));
+        fetchRelated();
     }, [blogId]);
 
     if (loading) return <div className="text-gray-500">Loading related posts...</div>;
+    if (error) return <div className="text-gray-500">Unable to load related posts</div>;
     if (!related.length) return null;
 
     return (

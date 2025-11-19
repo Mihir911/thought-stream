@@ -1,5 +1,6 @@
 import Blog from "../models/Blog.js";
 import User from "../models/User.js";
+import Upload from "../models/Upload.js";
 import { calculateBlogScore } from "../utils/feedAlgorithm.js";
 import { getTopSimilar } from "../utils/similarity.js";
 import mongoose from "mongoose";
@@ -272,58 +273,7 @@ export const toggleLike = async (req, res) => {
     }
 };
 
-// @desc    Add comment to blog
-// @route   POST /api/blogs/:id/comment
-// @access  Private
-export const addComment = async (req, res) => {
-    try {
-        const { text } = req.body;
 
-        if (!text || text.trim().length === 0) {
-            return res.status(400).json({
-                success: false,
-                message: 'Comment text is required'
-            });
-        }
-
-        const blog = await Blog.findById(req.params.id);
-
-        if (!blog) {
-            return res.status(404).json({
-                success: false,
-                message: 'Blog not found'
-            });
-        }
-
-        blog.comments.push({
-            user: req.userId,
-            text: text.trim()
-        });
-
-        await blog.save();
-
-        // UPDATE USER INTERESTS WHEN THEY COMMENT ON A BLOG
-        await updateUserInterests(req.userId, blog);
-
-        // Populate the new comment with user info
-        await blog.populate('comments.user', 'username profilePicture');
-
-        const newComment = blog.comments[blog.comments.length - 1];
-
-        res.status(201).json({
-            success: true,
-            message: 'Comment added successfully',
-            comment: newComment
-        });
-
-    } catch (error) {
-        console.error('Add comment error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Error adding comment'
-        });
-    }
-};
 
 // Helper function to update user interests
 const updateUserInterests = async (userId, blog) => {
@@ -451,67 +401,85 @@ export const getRelatedBlogs = async (req, res) => {
             });
         }
 
-        // ---1) prefilter candidates to a reasonable set
-        // wider OR so we have enough candidates for similarity ranking
+        // Get candidates for similarity comparison
         const candidates = await Blog.find({
             _id: { $ne: blog._id },
             isPublished: true,
             $or: [
                 { categories: { $in: blog.categories || [] } },
-                { tags: { $sin: blog.tags || [] } },
+                { tags: { $in: blog.tags || [] } },
                 { author: blog.author }
             ]
         })
-            .populate('author', 'username profilePicture')
-            .limit(200) // tune this; larger = slower
-            .lean();
+        .populate('author', 'username profilePicture')
+        .limit(50) // Increased limit for better results
+        .lean();
 
-        // if not enough candidates, fallback to recent popular post
-        if (candidates.length < 6) {
+        // If not enough candidates, add some popular posts as fallback
+        let relatedBlogs = [...candidates];
+        
+        if (candidates.length < 4) {
             const fallback = await Blog.find({
                 _id: { $ne: blog._id },
                 isPublished: true
             })
-                .populate('author', 'username profilePicture')
-                .sort({ likes: -1, createdAt: -1 })
-                .limit(20)
-                .lean();
-            //merge unique candidates
-            const ids = new Set(candidates.map(c => c._id.toString()));
+            .populate('author', 'username profilePicture')
+            .sort({ likes: -1, viewsCount: -1, createdAt: -1 })
+            .limit(10)
+            .lean();
+            
+            // Merge unique candidates
+            const existingIds = new Set(candidates.map(c => c._id.toString()));
             fallback.forEach(f => {
-                if (!ids.has(f._id.toString())) candidates.push(f);
+                if (!existingIds.has(f._id.toString())) {
+                    relatedBlogs.push(f);
+                }
             });
         }
 
-        //----2) Builld minimal docs array (query first)
-        const docs = [
-            {
-                id: blog._id.toString(),
-                text: `${blog.title} ${blog, excerpt || ''} ${blog.content?.slice(0, 2000) || ''} ${(blog.tags || []).join(' ')}`
-            },
-            ...candidates.map(c => ({
-                id: c._id.toString(),
-                text: `${c.title} ${c.excerpt || ''} ${c.content?.slice(0, 2000) || ''} ${(c.tags || []).join(' ')}`,
-                meta: c
-            }))
-        ];
-
-        //---3) Rank by content similarity
-        const getTopSimilar = await getTopSimilar(docs, 6);
-
-        // map back to blog document (include similarity score)
-        const related = getTopSimilar.map(s => {
-            //s contains fields from candidate doc + similarity
-            const candidate = candidates.find(c => c._id.toString() === s.id);
+        // Simple scoring algorithm (no external similarity library needed)
+        relatedBlogs = relatedBlogs.map(candidate => {
+            let score = 0;
+            
+            // Category match
+            const commonCategories = (blog.categories || []).filter(cat => 
+                (candidate.categories || []).includes(cat)
+            );
+            score += commonCategories.length * 3;
+            
+            // Tag match
+            const commonTags = (blog.tags || []).filter(tag => 
+                (candidate.tags || []).includes(tag)
+            );
+            score += commonTags.length * 2;
+            
+            // Same author
+            if (candidate.author._id.toString() === blog.author._id.toString()) {
+                score += 5;
+            }
+            
+            // Recency bonus
+            const daysOld = (Date.now() - new Date(candidate.createdAt).getTime()) / (1000 * 60 * 60 * 24);
+            if (daysOld < 7) score += 2; // Recent posts
+            if (daysOld < 30) score += 1; // Fairly recent
+            
+            // Popularity bonus
+            score += (candidate.likes?.length || 0) * 0.1;
+            score += (candidate.viewsCount || 0) * 0.01;
+            
             return {
                 ...candidate,
-                similarity: s.similarity
+                similarity: score
             };
         });
 
+        // Sort by score and take top 6
+        relatedBlogs.sort((a, b) => b.similarity - a.similarity);
+        const topRelated = relatedBlogs.slice(0, 6);
+
         res.json({
             success: true,
-            relatedBlogs: related
+            relatedBlogs: topRelated
         });
 
     } catch (error) {

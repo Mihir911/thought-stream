@@ -1,5 +1,5 @@
 import express from "express";
-import { createBlog, getBlogs, getBlogById, updateBlog, deleteBlog, toggleLike, addComment, getTrendingBlogs, getRelatedBlogs, getBlogsByCategory, getPersonalizedFeed, toggleBookmark, addThreadedComment, getBookmarks, updateBookmarkProgress, reactToBlog, recordView, toggleCommentUpvote, toggleFollowUser, getHybridPersonalizedFeed } from "../controllers/blogController.js";
+import { createBlog, getBlogs, getBlogById, updateBlog, deleteBlog, toggleLike, getTrendingBlogs, getRelatedBlogs, getBlogsByCategory, getPersonalizedFeed, toggleBookmark, addThreadedComment, getBookmarks, updateBookmarkProgress, reactToBlog, recordView, toggleCommentUpvote, toggleFollowUser, getHybridPersonalizedFeed } from "../controllers/blogController.js";
 import { protect } from "../middleware/auth.js";
 
 const router = express.Router();

@@ -1,194 +1,239 @@
-import React, { useState } from "react";
-import { Link, NavLink } from 'react-router-dom';
+import React, { useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
-import { LogOut, User, Menu, X, Search, Bookmark, Pen } from 'lucide-react';
 import { logout } from '../../redux/slices/authSlice';
-import Logo from '../../components/ui/Logo';
-import ProtectedLink from "../auth/ProtectedLinks";
-
-
+import { 
+  Menu, 
+  X, 
+  Search, 
+  User, 
+  Bookmark, 
+  PenSquare, 
+  LogOut,
+  Sparkles,
+  TrendingUp,
+  Grid
+} from 'lucide-react';
 
 const Header = () => {
-  const dispatch = useDispatch();
-  const { user, token } = useSelector((s) => s.auth || {});
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const { user, token } = useSelector((state) => state.auth);
+  const dispatch = useDispatch();
+  const location = useLocation();
+  const navigate = useNavigate();
 
   const handleLogout = () => {
     dispatch(logout());
     setUserMenuOpen(false);
+    navigate('/');
   };
 
+  const isActiveRoute = (path) => {
+    return location.pathname === path;
+  };
+
+  const navLinks = [
+    { path: '/feed', label: 'For You', icon: Sparkles },
+    { path: '/trending', label: 'Trending', icon: TrendingUp },
+    { path: '/categories', label: 'Categories', icon: Grid },
+  ];
 
   return (
-    <header className="bg-white border-b border-slate-100">
+    <header className="bg-white shadow-sm border-b border-gray-100 sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          {/* Left: Logo */}
-          <div className="flex items-center gap-3">
-            <Link to="/" className="flex items-center gap-3">
-              <div className="p-1 rounded-md bg-gradient-to-r from-sky-600 to-blue-600">
-                <Logo className="h-9 w-auto" />
-              </div>
-              {/* <span className="hidden sm:inline-block text-lg font-extrabold text-slate-900">BlogSpace</span> */}
-            </Link>
-          </div>
+        <div className="flex justify-between items-center h-16">
+          {/* Logo */}
+          <Link to="/" className="flex items-center space-x-3">
+            <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-blue-600 rounded-lg flex items-center justify-center">
+              <PenSquare className="h-6 w-6 text-white" />
+            </div>
+            <span className="text-xl font-bold text-gray-900">BlogSpace</span>
+          </Link>
 
-          {/* Center: nav (desktop) */}
-          <nav className="hidden md:flex items-center gap-6">
-            <ProtectedLink
-              to="/feed"
-              className="text-sm font-medium text-slate-700 hover:text-sky-600 transition"
-            >
-              For you
-            </ProtectedLink>
-
-            <NavLink
-              to="/trending"
-              className={({ isActive }) => `text-sm font-medium ${isActive ? 'text-sky-600' : 'text-slate-700 hover:text-sky-600'}`}
-            >
-              Trending
-            </NavLink>
-
-            <NavLink
-              to="/categories"
-              className={({ isActive }) => `text-sm font-medium ${isActive ? 'text-sky-600' : 'text-slate-700 hover:text-sky-600'}`}
-            >
-              Categories
-            </NavLink>
+          {/* Desktop Navigation */}
+          <nav className="hidden md:flex items-center space-x-8">
+            {navLinks.map((link) => {
+              const Icon = link.icon;
+              return (
+                <Link
+                  key={link.path}
+                  to={link.path}
+                  className={`flex items-center space-x-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    isActiveRoute(link.path)
+                      ? 'text-primary-600 bg-primary-50'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  }`}
+                >
+                  <Icon className="h-4 w-4" />
+                  <span>{link.label}</span>
+                </Link>
+              );
+            })}
           </nav>
 
-          {/* Right: actions */}
-          <div className="flex items-center gap-4">
-            {/* Search icon - opens site-wide search (could be wired later) */}
-            <button
-              aria-label="Search posts"
-              className="p-2 rounded-md text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition"
-              title="Search"
-            >
+          {/* Right Section */}
+          <div className="flex items-center space-x-4">
+            {/* Search Button */}
+            <button className="p-2 text-gray-400 hover:text-gray-600 transition-colors">
               <Search className="h-5 w-5" />
             </button>
 
-            {/* Desktop CTA / Auth actions */}
             {token ? (
-              <>
-                <Link
-                  to="/create"
-                  className="hidden sm:inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-sky-600 hover:bg-sky-700 text-white text-sm font-semibold shadow"
+              /* User Menu */
+              <div className="relative">
+                <button
+                  onClick={() => setUserMenuOpen(!userMenuOpen)}
+                  className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-50 transition-colors"
                 >
-                  <Pen className="h-4 w-4" />
-                  Write
-                </Link>
+                  <div className="w-8 h-8 bg-gradient-to-br from-primary-500 to-blue-600 rounded-full flex items-center justify-center text-white text-sm font-medium">
+                    {user?.username?.[0]?.toUpperCase() || <User className="h-4 w-4" />}
+                  </div>
+                  <span className="hidden sm:block text-sm font-medium text-gray-700">
+                    {user?.username || 'User'}
+                  </span>
+                </button>
 
-                <div className="relative">
-                  {/* Avatar button */}
-                  <button
-                    onClick={() => setUserMenuOpen(prev => !prev)}
-                    aria-haspopup="true"
-                    aria-expanded={userMenuOpen}
-                    className="flex items-center gap-2 px-2 py-1 rounded-md hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-sky-300"
-                    title="Account"
-                  >
-                    <div className="h-8 w-8 rounded-full bg-sky-100 text-sky-700 flex items-center justify-center font-medium">
-                      {user?.username?.[0]?.toUpperCase() || <User className="h-4 w-4" />}
-                    </div>
-                    <span className="hidden sm:inline-block text-sm text-slate-700">{user?.username || 'You'}</span>
-                  </button>
-
-                  {/* Dropdown */}
-                  {userMenuOpen && (
-                    <div
-                      role="menu"
-                      aria-label="Account menu"
-                      className="absolute right-0 mt-2 w-44 bg-white border border-slate-100 rounded-md shadow-lg z-40"
+                {/* User Dropdown */}
+                {userMenuOpen && (
+                  <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
+                    <Link
+                      to="/profile"
+                      onClick={() => setUserMenuOpen(false)}
+                      className="flex items-center space-x-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                     >
-                      <Link
-                        to="/profile"
-                        onClick={() => setUserMenuOpen(false)}
-                        className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
-                      >
-                        <div className="flex items-center gap-2"><User className="h-4 w-4 text-sky-600" /> Profile</div>
-                      </Link>
-
-                      <Link
-                        to="/bookmarks"
-                        onClick={() => setUserMenuOpen(false)}
-                        className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
-                      >
-                        <div className="flex items-center gap-2"><Bookmark className="h-4 w-4 text-sky-600" /> Saved</div>
-                      </Link>
-
-                      <Link
-                        to="/create"
-                        onClick={() => setUserMenuOpen(false)}
-                        className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
-                      >
-                        <div className="flex items-center gap-2"><Pen className="h-4 w-4 text-sky-600" /> New post</div>
-                      </Link>
-
-                      <button
-                        onClick={handleLogout}
-                        className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
-                      >
-                        <div className="flex items-center gap-2"><LogOut className="h-4 w-4" /> Logout</div>
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </>
+                      <User className="h-4 w-4" />
+                      <span>Profile</span>
+                    </Link>
+                    <Link
+                      to="/bookmarks"
+                      onClick={() => setUserMenuOpen(false)}
+                      className="flex items-center space-x-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <Bookmark className="h-4 w-4" />
+                      <span>Bookmarks</span>
+                    </Link>
+                    <Link
+                      to="/my-blogs"
+                      onClick={() => setUserMenuOpen(false)}
+                      className="flex items-center space-x-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <PenSquare className="h-4 w-4" />
+                      <span>My Blogs</span>
+                    </Link>
+                    <Link
+                      to="/create"
+                      onClick={() => setUserMenuOpen(false)}
+                      className="flex items-center space-x-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <PenSquare className="h-4 w-4" />
+                      <span>Write Story</span>
+                    </Link>
+                    <hr className="my-2" />
+                    <button
+                      onClick={handleLogout}
+                      className="flex items-center space-x-3 w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+                    >
+                      <LogOut className="h-4 w-4" />
+                      <span>Logout</span>
+                    </button>
+                  </div>
+                )}
+              </div>
             ) : (
-              <>
+              /* Auth Buttons */
+              <div className="flex items-center space-x-3">
                 <Link
                   to="/login"
-                  className="text-sm font-medium text-slate-700 hover:text-sky-600 transition"
+                  className="text-sm font-medium text-gray-700 hover:text-gray-900 px-3 py-2"
                 >
                   Login
                 </Link>
                 <Link
                   to="/register"
-                  className="hidden sm:inline-flex items-center px-3 py-1.5 rounded-md bg-sky-600 hover:bg-sky-700 text-white text-sm font-semibold shadow"
+                  className="bg-primary-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary-600 transition-colors"
                 >
-                  Sign up
+                  Get Started
                 </Link>
-              </>
+              </div>
             )}
 
-            {/* Mobile menu button */}
+            {/* Mobile Menu Button */}
             <button
-              onClick={() => setMobileOpen(prev => !prev)}
-              className="md:hidden p-2 rounded-md text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-sky-300"
-              aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="md:hidden p-2 text-gray-400 hover:text-gray-600"
             >
-              {mobileOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+              {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
             </button>
           </div>
         </div>
-      </div>
 
-      {/* Mobile nav panel */}
-      {mobileOpen && (
-        <div className="md:hidden border-t border-slate-100 bg-white">
-          <div className="px-4 py-3 space-y-2">
-            <ProtectedLink to="/feed" className="block px-3 py-2 rounded-md text-slate-700 hover:bg-slate-50">For you</ProtectedLink>
-            <Link to="/trending" className="block px-3 py-2 rounded-md text-slate-700 hover:bg-slate-50">Trending</Link>
-            <Link to="/categories" className="block px-3 py-2 rounded-md text-slate-700 hover:bg-slate-50">Categories</Link>
-
-            {token ? (
-              <>
-                <Link to="/create" className="block px-3 py-2 rounded-md bg-sky-600 text-white text-sm font-semibold">Write a post</Link>
-                <Link to="/bookmarks" className="block px-3 py-2 rounded-md text-slate-700 hover:bg-slate-50">Saved</Link>
-                <Link to="/profile" className="block px-3 py-2 rounded-md text-slate-700 hover:bg-slate-50">Profile</Link>
-                <button onClick={handleLogout} className="w-full text-left px-3 py-2 rounded-md text-red-600 hover:bg-red-50">Logout</button>
-              </>
-            ) : (
-              <>
-                <Link to="/login" className="block px-3 py-2 rounded-md text-slate-700 hover:bg-slate-50">Login</Link>
-                <Link to="/register" className="block px-3 py-2 rounded-md bg-sky-600 text-white text-sm font-semibold">Sign up</Link>
-              </>
-            )}
+        {/* Mobile Menu */}
+        {mobileMenuOpen && (
+          <div className="md:hidden border-t border-gray-200 py-4">
+            <div className="flex flex-col space-y-2">
+              {navLinks.map((link) => {
+                const Icon = link.icon;
+                return (
+                  <Link
+                    key={link.path}
+                    to={link.path}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium ${
+                      isActiveRoute(link.path)
+                        ? 'text-primary-600 bg-primary-50'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    <Icon className="h-4 w-4" />
+                    <span>{link.label}</span>
+                  </Link>
+                );
+              })}
+              
+              {token ? (
+                <>
+                  <hr className="my-2" />
+                  <Link
+                    to="/profile"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center space-x-2 px-3 py-2 rounded-lg text-sm text-gray-600 hover:text-gray-900"
+                  >
+                    <User className="h-4 w-4" />
+                    <span>Profile</span>
+                  </Link>
+                  <Link
+                    to="/create"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center space-x-2 px-3 py-2 rounded-lg text-sm text-gray-600 hover:text-gray-900"
+                  >
+                    <PenSquare className="h-4 w-4" />
+                    <span>Write Story</span>
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <hr className="my-2" />
+                  <Link
+                    to="/login"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center space-x-2 px-3 py-2 rounded-lg text-sm text-gray-600 hover:text-gray-900"
+                  >
+                    <span>Login</span>
+                  </Link>
+                  <Link
+                    to="/register"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center space-x-2 px-3 py-2 rounded-lg text-sm bg-primary-500 text-white hover:bg-primary-600"
+                  >
+                    <span>Get Started</span>
+                  </Link>
+                </>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </header>
   );
 };

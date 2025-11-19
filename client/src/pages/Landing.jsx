@@ -1,255 +1,225 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import BlogCard from '../components/blog/BlogCard';
+import { useSelector } from 'react-redux';
+import { Search, ArrowRight, Users, PenTool, TrendingUp, BookOpen } from 'lucide-react';
 import api from '../utils/api';
-import { Search } from 'lucide-react';
-import ProtectedLink from '../components/auth/ProtectedLinks';
-
-const DEFAULT_CATEGORIES = [
-  'Technology', 'Programming', 'Design', 'Lifestyle',
-  'Travel', 'Food', 'Health', 'Business', 'Education'
-];
 
 const Landing = () => {
-  const [latest, setLatest] = useState([]);
+  const { token } = useSelector((state) => state.auth);
+  const [featuredBlogs, setFeaturedBlogs] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [query, setQuery] = useState('');
-  const [filtered, setFiltered] = useState([]);
-  const [selectedCategory, setSelectedCategory] = useState('');
 
   useEffect(() => {
-    let mounted = true;
-    setLoading(true);
-    api.get('/blogs?page=1&limit=9')
-      .then(res => {
-        if (!mounted) return;
-        const list = res.data.blogs || [];
-        setLatest(list);
-        setFiltered(list);
-      })
-      .catch(err => {
-        console.error('Failed to load latest posts', err);
-      })
-      .finally(() => {
-        if (mounted) setLoading(false);
-      });
-    return () => { mounted = false; };
+    const fetchFeaturedBlogs = async () => {
+      try {
+        const response = await api.get('/blogs?limit=6&sortBy=createdAt&sortOrder=desc');
+        setFeaturedBlogs(response.data.blogs || []);
+      } catch (error) {
+        console.error('Failed to fetch featured blogs:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchFeaturedBlogs();
   }, []);
 
-  useEffect(() => {
-    const q = query.trim().toLowerCase();
-    const result = latest.filter(b => {
-      const inTitle = b.title && b.title.toLowerCase().includes(q);
-      const inExcerpt = b.excerpt && b.excerpt.toLowerCase().includes(q);
-      const inCategory = selectedCategory ? (b.categories || []).includes(selectedCategory) : true;
-      return (q ? (inTitle || inExcerpt) : true) && inCategory;
-    });
-    setFiltered(result);
-  }, [query, latest, selectedCategory]);
+  const features = [
+    {
+      icon: PenTool,
+      title: 'Beautiful Editor',
+      description: 'Write in our distraction-free editor with real-time preview and auto-save.'
+    },
+    {
+      icon: TrendingUp,
+      title: 'Grow Your Audience',
+      description: 'Reach readers who care about your topics and build your writing career.'
+    },
+    {
+      icon: BookOpen,
+      title: 'Personalized Feed',
+      description: 'Discover content tailored to your interests and reading habits.'
+    },
+    {
+      icon: Users,
+      title: 'Engage with Community',
+      description: 'Connect with fellow writers and readers through comments and reactions.'
+    }
+  ];
 
   return (
-    <div className="min-h-screen bg-white text-slate-900">
-      {/* Hero */}
-      <header className="bg-white">
-        <div className="max-w-7xl mx-auto px-6 py-16 lg:py-24">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
-            {/* Left: text */}
-            <div className="lg:col-span-6">
-              <div className="space-y-4">
-                <h1 className="text-4xl sm:text-5xl font-extrabold leading-tight tracking-tight text-slate-900">
-                  Write what matters. Read what moves you.
-                </h1>
-                <p className="text-lg text-slate-600 max-w-xl">
-                  A beautiful place to write, discover, and share long-form stories, ideas, and perspectives.
-                  Follow topics you care about and build an audience for your voice.
-                </p>
-
-                <div className="flex flex-col sm:flex-row gap-3 mt-6">
+    <div className="min-h-screen bg-white">
+      {/* Hero Section */}
+      <section className="relative bg-gradient-to-br from-gray-50 to-primary-50 py-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center">
+            <h1 className="text-4xl md:text-6xl font-bold text-gray-900 mb-6">
+              Write Your
+              <span className="text-primary-600"> Story</span>
+            </h1>
+            <p className="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
+              A beautiful platform for writers to share their voice and readers to discover amazing stories. 
+              Join thousands of creators building their audience.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-12">
+              {token ? (
+                <Link
+                  to="/create"
+                  className="bg-primary-500 text-white px-8 py-4 rounded-lg font-semibold text-lg hover:bg-primary-600 transition-colors flex items-center gap-2"
+                >
+                  Start Writing
+                  <ArrowRight className="h-5 w-5" />
+                </Link>
+              ) : (
+                <>
                   <Link
                     to="/register"
-                    className="inline-flex items-center justify-center px-6 py-3 rounded-lg bg-sky-600 hover:bg-sky-700 text-white font-semibold shadow-lg transform hover:-translate-y-0.5 transition"
+                    className="bg-primary-500 text-white px-8 py-4 rounded-lg font-semibold text-lg hover:bg-primary-600 transition-colors"
                   >
-                    Get started — it's free
+                    Get Started Free
                   </Link>
-
-                  <ProtectedLink
+                  <Link
                     to="/feed"
-                    className="inline-flex items-center justify-center px-6 py-3 rounded-lg border border-slate-200 bg-white text-slate-900 font-medium shadow-sm hover:shadow-md transition"
+                    className="border border-gray-300 text-gray-700 px-8 py-4 rounded-lg font-semibold text-lg hover:bg-gray-50 transition-colors"
                   >
-                    View personalized feed
-                  </ProtectedLink>
-                </div>
-
-                <div className="mt-6">
-                  <label htmlFor="search" className="sr-only">Search posts</label>
-                  <div className="relative max-w-xl">
-                    <span className="absolute inset-y-0 left-3 flex items-center text-slate-400">
-                      <Search className="h-4 w-4" />
-                    </span>
-                    <input
-                      id="search"
-                      className="w-full pl-10 pr-4 py-3 rounded-lg border border-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-300"
-                      placeholder="Search posts, topics, or authors"
-                      value={query}
-                      onChange={(e) => setQuery(e.target.value)}
-                      aria-label="Search posts"
-                    />
-                  </div>
-
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <button
-                      onClick={() => setSelectedCategory('')}
-                      className={`px-3 py-1.5 rounded-full text-sm ${selectedCategory === '' ? 'bg-sky-100 text-sky-700' : 'bg-slate-100 text-slate-700'}`}
-                    >
-                      All
-                    </button>
-                    {DEFAULT_CATEGORIES.map(cat => (
-                      <button
-                        key={cat}
-                        onClick={() => setSelectedCategory(cat)}
-                        className={`px-3 py-1.5 rounded-full text-sm ${selectedCategory === cat ? 'bg-sky-100 text-sky-700' : 'bg-slate-100 text-slate-700'}`}
-                      >
-                        {cat}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Right: decorative illustration + featured preview */}
-            <div className="lg:col-span-6">
-              <div className="relative">
-                <div className="rounded-2xl overflow-hidden shadow-2xl transform hover:-translate-y-1 transition">
-                  <div className="bg-gradient-to-br from-sky-700 to-blue-800 text-white p-8 lg:p-10">
-                    <div className="flex items-start justify-between gap-6">
-                      <div className="flex-1">
-                        <h3 className="text-xl font-bold">Editor’s picks</h3>
-                        <p className="mt-2 text-sky-200 text-sm max-w-md">Selected stories from our community — thoughtful, inspiring, and worth your time.</p>
-                      </div>
-                      <div className="hidden sm:flex items-center">
-                        <svg width="96" height="96" viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg" className="opacity-90">
-                          <rect width="96" height="96" rx="16" fill="white" opacity="0.06"/>
-                          <path d="M32 60c10-6 22-10 30-22 5-7 4-12-1-15-6-3-12 0-18 4-8 6-14 10-22 14" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.95"/>
-                        </svg>
-                      </div>
-                    </div>
-
-                    <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {loading ? (
-                        <>
-                          <div className="h-28 rounded-lg bg-white/10 animate-pulse" />
-                          <div className="h-28 rounded-lg bg-white/10 animate-pulse" />
-                        </>
-                      ) : (
-                        latest.slice(0, 4).map(post => (
-                          <Link key={post._id} to={`/blogs/${post._id}`} className="block bg-white/5 p-3 rounded-lg hover:bg-white/10 transition">
-                            <h4 className="text-sm font-semibold truncate">{post.title}</h4>
-                            <p className="text-xs text-sky-100 mt-1 line-clamp-2">{post.excerpt}</p>
-                            <div className="text-xs text-sky-200 mt-3 flex items-center justify-between">
-                              <span>{post.author?.username || '—'}</span>
-                              <span>{new Date(post.createdAt).toLocaleDateString()}</span>
-                            </div>
-                          </Link>
-                        ))
-                      )}
-                    </div>
-
-                    <div className="mt-6 text-right">
-                      <Link to="/trending" className="text-xs text-white/90 hover:text-white underline">See more trending →</Link>
-                    </div>
-                  </div>
-                </div>
-
-                {/* subtle decorative floating card */}
-                {/* <div className="absolute -bottom-6 left-6 w-44 bg-white rounded-xl shadow-lg p-3 transform rotate-1 hidden lg:block">
-                  <div className="text-xs text-slate-500">Top writer</div>
-                  <div className="font-medium text-slate-900 mt-1">A. Smith</div>
-                  <div className="text-xs text-slate-400 mt-1">“Short reflections that inspire long thinking.”</div>
-                </div> */}
-              </div>
+                    Explore Stories
+                  </Link>
+                </>
+              )}
             </div>
           </div>
-        </div>
-      </header>
 
-      {/* Features */}
-      <section className="max-w-7xl mx-auto px-6 py-12">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-white border border-slate-100 rounded-lg p-6 shadow-sm hover:shadow-md transition">
-            <h4 className="text-lg font-semibold text-slate-900">Beautiful editor</h4>
-            <p className="text-sm text-slate-600 mt-2">Write in a clean, minimal editor with autosave and drafts so your ideas are never lost.</p>
-          </div>
-          <div className="bg-white border border-slate-100 rounded-lg p-6 shadow-sm hover:shadow-md transition">
-            <h4 className="text-lg font-semibold text-slate-900">Personalized feed</h4>
-            <p className="text-sm text-slate-600 mt-2">Your homepage adapts to interests you choose and the authors you follow.</p>
-          </div>
-          <div className="bg-white border border-slate-100 rounded-lg p-6 shadow-sm hover:shadow-md transition">
-            <h4 className="text-lg font-semibold text-slate-900">Save & resume</h4>
-            <p className="text-sm text-slate-600 mt-2">Bookmark posts, track reading progress, and pick up where you left off across devices.</p>
+          {/* Search Bar */}
+          <div className="max-w-2xl mx-auto">
+            <div className="relative">
+              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+              <input
+                type="text"
+                placeholder="Search for stories, topics, or authors..."
+                className="w-full pl-12 pr-4 py-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent text-lg"
+              />
+            </div>
           </div>
         </div>
       </section>
 
-      {/* Latest posts */}
-      <section className="max-w-7xl mx-auto px-6 py-8">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-bold">Latest posts</h2>
-          <Link to="/blogs" className="text-sm text-sky-600 hover:underline">Browse all</Link>
-        </div>
+      {/* Features Section */}
+      <section className="py-20 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+              Everything You Need to Write
+            </h2>
+            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+              Powerful tools and an engaged community to help you share your best work.
+            </p>
+          </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+            {features.map((feature, index) => {
+              const Icon = feature.icon;
+              return (
+                <div key={index} className="text-center p-6">
+                  <div className="w-16 h-16 bg-primary-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Icon className="h-8 w-8 text-primary-600" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                    {feature.title}
+                  </h3>
+                  <p className="text-gray-600">
+                    {feature.description}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* Featured Stories Section */}
+      <section className="py-20 bg-gray-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+              Featured Stories
+            </h2>
+            <p className="text-xl text-gray-600">
+              Discover what the community is reading and writing about
+            </p>
+          </div>
+
           {loading ? (
-            Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="h-56 bg-slate-100 animate-pulse rounded-lg" />
-            ))
-          ) : filtered.length ? (
-            filtered.map(b => <BlogCard key={b._id} blog={b} />)
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {[...Array(6)].map((_, index) => (
+                <div key={index} className="bg-white rounded-lg shadow-sm p-6 animate-pulse">
+                  <div className="h-6 bg-gray-200 rounded mb-4"></div>
+                  <div className="h-4 bg-gray-200 rounded mb-2"></div>
+                  <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                </div>
+              ))}
+            </div>
           ) : (
-            <div className="col-span-full text-center text-slate-500 py-12 bg-white rounded-lg">
-              No posts found for your search.
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {featuredBlogs.map((blog) => (
+                <Link
+                  key={blog._id}
+                  to={`/blogs/${blog._id}`}
+                  className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow p-6 group"
+                >
+                  <h3 className="text-xl font-semibold text-gray-900 mb-3 group-hover:text-primary-600 transition-colors">
+                    {blog.title}
+                  </h3>
+                  <p className="text-gray-600 mb-4 line-clamp-3">
+                    {blog.excerpt || 'Read this amazing story...'}
+                  </p>
+                  <div className="flex items-center justify-between text-sm text-gray-500">
+                    <span>{blog.author?.username || 'Anonymous'}</span>
+                    <span>{new Date(blog.createdAt).toLocaleDateString()}</span>
+                  </div>
+                </Link>
+              ))}
             </div>
           )}
-        </div>
 
-        <div className="mt-8 text-center">
-          <ProtectedLink to="/feed" className="inline-flex items-center px-5 py-3 rounded-lg bg-sky-600 text-white font-medium hover:bg-sky-700 shadow">
-            Explore personalized feed
-          </ProtectedLink>
-        </div>
-      </section>
-
-      {/* Testimonials / community */}
-      <section className="max-w-7xl mx-auto px-6 py-12">
-        <div className="bg-gradient-to-r from-slate-50 to-white border border-slate-100 rounded-2xl p-8">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
-            <div className="md:col-span-2">
-              <h3 className="text-xl font-bold">Join a community of curious writers</h3>
-              <p className="text-slate-600 mt-2">People come to BlogSpace to read well-crafted pieces, discover new ideas, and build an audience for their writing.</p>
-            </div>
-            <div className="flex gap-3 justify-start md:justify-end">
-              <img alt="avatar1" src="https://i.pravatar.cc/64?img=12" className="h-12 w-12 rounded-full shadow" />
-              <img alt="avatar2" src="https://i.pravatar.cc/64?img=32" className="h-12 w-12 rounded-full shadow" />
-              <img alt="avatar3" src="https://i.pravatar.cc/64?img=44" className="h-12 w-12 rounded-full shadow" />
-            </div>
+          <div className="text-center mt-12">
+            <Link
+              to="/feed"
+              className="inline-flex items-center gap-2 text-primary-600 hover:text-primary-700 font-semibold text-lg"
+            >
+              Explore All Stories
+              <ArrowRight className="h-5 w-5" />
+            </Link>
           </div>
         </div>
       </section>
 
-      {/* Footer CTA */}
-      <div className="bg-white border-t border-slate-100">
-        <div className="max-w-7xl mx-auto px-6 py-10 flex flex-col md:flex-row items-center justify-between gap-4">
-          <div>
-            <h4 className="text-lg font-semibold">Ready to share your first story?</h4>
-            <p className="text-sm text-slate-600 mt-1">Sign up and publish in minutes — the audience is waiting.</p>
-          </div>
-
-          <div className="flex gap-3">
-            <Link to="/register" className="px-5 py-3 bg-sky-600 text-white rounded-lg shadow hover:bg-sky-700">Create account</Link>
-            <ProtectedLink to="/create" className="px-5 py-3 border border-slate-200 rounded-lg">Write a post</ProtectedLink>
-          </div>
+      {/* CTA Section */}
+      <section className="py-20 bg-primary-600">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <h2 className="text-3xl md:text-4xl font-bold text-white mb-6">
+            Ready to Share Your Story?
+          </h2>
+          <p className="text-xl text-primary-100 mb-8">
+            Join thousands of writers who've found their audience on BlogSpace
+          </p>
+          {token ? (
+            <Link
+              to="/create"
+              className="bg-white text-primary-600 px-8 py-4 rounded-lg font-semibold text-lg hover:bg-gray-100 transition-colors inline-flex items-center gap-2"
+            >
+              Write Your First Story
+              <ArrowRight className="h-5 w-5" />
+            </Link>
+          ) : (
+            <Link
+              to="/register"
+              className="bg-white text-primary-600 px-8 py-4 rounded-lg font-semibold text-lg hover:bg-gray-100 transition-colors"
+            >
+              Start Writing Today
+            </Link>
+          )}
         </div>
-      </div>
+      </section>
     </div>
   );
 };
