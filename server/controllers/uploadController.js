@@ -20,9 +20,9 @@ export const uploadImage = async (req, res) => {
 
 
     // Check if Cloudinary is properly configured
-    if (!process.env.CLOUDINARY_CLOUD_NAME || 
-        !process.env.CLOUDINARY_API_KEY || 
-        !process.env.CLOUDINARY_API_SECRET) {
+    if (!process.env.CLOUDINARY_CLOUD_NAME ||
+      !process.env.CLOUDINARY_API_KEY ||
+      !process.env.CLOUDINARY_API_SECRET) {
       console.error('❌ Cloudinary env vars missing');
       return res.status(500).json({
         success: false,
@@ -61,7 +61,7 @@ export const uploadImage = async (req, res) => {
         {
           folder: 'blogspace',
           transformation: [
-            { quality: 'auto', fetch_format: 'auto' }
+            { width: 1920, crop: 'limit', quality: 'auto', fetch_format: 'auto' }
           ]
         },
         (error, result) => {
@@ -80,13 +80,15 @@ export const uploadImage = async (req, res) => {
         width: 400,
         height: 300,
         crop: 'fill',
+        gravity: 'auto',
         quality: 'auto',
         fetch_format: 'auto'
       }),
       medium: cloudinary.url(uploadResult.public_id, {
         width: 800,
         height: 600,
-        crop: 'limit',
+        crop: 'fill',
+        gravity: 'auto',
         quality: 'auto',
         fetch_format: 'auto'
       }),
@@ -129,18 +131,18 @@ export const uploadImage = async (req, res) => {
 
   } catch (error) {
     console.error('Upload error:', error);
-    
+
     if (error.message.includes('File size too large')) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'File too large for Cloudinary' 
+      return res.status(400).json({
+        success: false,
+        message: 'File too large for Cloudinary'
       });
     }
-    
-    res.status(500).json({ 
-      success: false, 
-      message: 'Upload failed', 
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined 
+
+    res.status(500).json({
+      success: false,
+      message: 'Upload failed',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
@@ -153,9 +155,9 @@ export const deleteUpload = async (req, res) => {
   try {
     const upload = await Upload.findById(req.params.id);
     if (!upload) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Upload not found' 
+      return res.status(404).json({
+        success: false,
+        message: 'Upload not found'
       });
     }
 
@@ -163,11 +165,11 @@ export const deleteUpload = async (req, res) => {
     const user = req.user;
     const isOwner = upload.uploadedBy.toString() === user._id.toString();
     const isAdmin = user.role === 'admin';
-    
+
     if (!isOwner && !isAdmin) {
-      return res.status(403).json({ 
-        success: false, 
-        message: 'Forbidden' 
+      return res.status(403).json({
+        success: false,
+        message: 'Forbidden'
       });
     }
 
@@ -182,31 +184,16 @@ export const deleteUpload = async (req, res) => {
     // Remove from database
     await Upload.findByIdAndDelete(req.params.id);
 
-    res.json({ 
-      success: true, 
-      message: 'Upload deleted successfully' 
+    res.json({
+      success: true,
+      message: 'Upload deleted successfully'
     });
 
   } catch (error) {
     console.error('Delete upload error:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Error deleting upload' 
+    res.status(500).json({
+      success: false,
+      message: 'Error deleting upload'
     });
   }
-};
-
-// Remove GridFS-related functions since we're using Cloudinary
-export const serveUpload = async (req, res) => {
-  return res.status(410).json({ 
-    success: false, 
-    message: 'This endpoint is no longer available. Use Cloudinary URLs directly.' 
-  });
-};
-
-export const serveThumbnail = async (req, res) => {
-  return res.status(410).json({ 
-    success: false, 
-    message: 'This endpoint is no longer available. Use Cloudinary thumbnail URLs directly.' 
-  });
 };

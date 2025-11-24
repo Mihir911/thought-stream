@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@reduxjs/toolkit": "^1.9.5",
+    "@tailwindcss/typography": "^0.5.19",
     "@tiptap/extension-code-block-lowlight": "^3.10.7",
     "@tiptap/extension-color": "^3.10.7",
     "@tiptap/extension-image": "^3.10.7",
@@ -27,6 +28,7 @@
     "@tiptap/starter-kit": "^3.10.7",
     "@uiw/react-md-editor": "^3.25.0",
     "axios": "^1.5.0",
+    "date-fns": "^4.1.0",
     "lowlight": "^3.3.0",
     "lucide-react": "^0.263.1",
     "react": "^18.2.0",

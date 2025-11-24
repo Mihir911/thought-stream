@@ -52,16 +52,15 @@ export function calculateBlogScore(blog, userInterests = []) {
     //2. recency
     const now = Date.now();
     const blogTime = new Date(blog.createdAt).getTime();
-    const daysOld = (now - blogTime) / (1000 * 60 * 24);
+    const daysOld = (now - blogTime) / (1000 * 60 * 60 * 24);
     const recencyScore = Math.max(0, 10 - daysOld); // blogs in last 10 days get max score
     score += recencyScore * RECENT_WEIGHT;
 
+    //3. Unique views (not total views)
+    score += (blog.viewsCount || 0) * LIKE_WEIGHT;
 
-    //likes
-    score += (blog.likes ? blog.likes.length : 0) * LIKE_WEIGHT;
-
-    // Comments
+    //4. Comments
     score += (blog.comments ? blog.comments.length : 0) * COMMENT_WEIGHT;
 
     return score;
-};
+}

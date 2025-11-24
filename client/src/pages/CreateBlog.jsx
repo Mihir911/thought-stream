@@ -1,39 +1,37 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
-import { 
-  Save, 
-  Eye, 
-  Image as ImageIcon, 
-  Type, 
-  Clock, 
-  Tag,
+import {
+  Save,
+  Eye,
   X,
   AlertCircle,
   CheckCircle2,
-  Upload
+  Upload,
+  Image as ImageIcon
 } from 'lucide-react';
 import api from '../utils/api';
+import RichTextEditor from '../components/editor/RichTextEditor';
 
 const CreateBlog = () => {
   const navigate = useNavigate();
   const { token } = useSelector(state => state.auth);
   const [loading, setLoading] = useState(false);
-  const [previewMode, setPreviewMode] = useState(false);
   const [alert, setAlert] = useState({ show: false, type: '', message: '' });
 
   // Form state
   const [formData, setFormData] = useState({
     title: '',
-    content: '',
+    content: '', // Plain text for fallback/search
+    contentBlocks: [], // Structured content
     categories: [],
     tags: [],
     coverImage: '',
+    coverUpload: null, // ID of the upload
     isPublished: true
   });
 
-  const [wordCount, setWordCount] = useState(0);
-  const [readTime, setReadTime] = useState(0);
+  const [tiptapContent, setTiptapContent] = useState(null);
 
   const categoriesList = [
     'Technology', 'Programming', 'Design', 'Lifestyle', 'Travel',
@@ -44,14 +42,8 @@ const CreateBlog = () => {
   useEffect(() => {
     if (!token) {
       navigate('/login');
-      return;
     }
-
-    // Calculate word count and read time
-    const words = formData.content.trim().split(/\s+/).filter(word => word.length > 0);
-    setWordCount(words.length);
-    setReadTime(Math.max(1, Math.ceil(words.length / 200)));
-  }, [formData.content, token, navigate]);
+  }, [token, navigate]);
 
   const showAlert = (type, message) => {
     setAlert({ show: true, type, message });
@@ -98,354 +90,251 @@ const CreateBlog = () => {
     const file = e.target.files[0];
     if (!file) return;
 
-    if (!file.type.startsWith('image/')) {
-      showAlert('error', 'Please select an image file');
-      return;
-    }
-
-    if (file.size > 10 * 1024 * 1024) {
-      showAlert('error', 'Image size should be less than 10MB');
-      return;
-    }
-
     try {
       setLoading(true);
-      const formData = new FormData();
-      formData.append('file', file);
+      const data = new FormData();
+      data.append('file', file);
 
-      const response = await api.post('/uploads', formData, {
+      const response = await api.post('/uploads', data, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
 
       if (response.data.upload) {
-        handleInputChange('coverImage', response.data.upload.url);
+        setFormData(prev => ({
+          ...prev,
+          coverImage: response.data.upload.url,
+          coverUpload: response.data.upload._id
+        }));
         showAlert('success', 'Cover image uploaded successfully!');
       }
     } catch (error) {
       console.error('Upload failed:', error);
-      showAlert('error', 'Failed to upload image. Please try again.');
+      showAlert('error', 'Failed to upload image.');
     } finally {
       setLoading(false);
     }
   };
 
-  const validateForm = () => {
+  // Transform Tiptap JSON to Backend Blocks
+  const transformContent = (json) => {
+    if (!json || !json.content) return [];
+
+    return json.content.map(node => {
+      if (node.type === 'paragraph') {
+        return {
+          type: 'paragraph',
+          data: { text: node.content ? node.content.map(c => c.text).join('') : '' }
+        };
+      }
+      if (node.type === 'heading') {
+        return {
+          type: 'heading',
+          data: {
+            text: node.content ? node.content.map(c => c.text).join('') : '',
+            level: node.attrs.level
+          }
+        };
+      }
+      if (node.type === 'image') {
+        return {
+          type: 'image',
+          data: {
+            url: node.attrs.src,
+            caption: node.attrs.alt || ''
+          }
+        };
+      }
+      if (node.type === 'bulletList' || node.type === 'orderedList') {
+        return {
+          type: 'list',
+          data: {
+            style: node.type === 'orderedList' ? 'ordered' : 'unordered',
+            items: node.content.map(li => li.content[0].content[0].text)
+          }
+        };
+      }
+      if (node.type === 'blockquote') {
+        return {
+          type: 'quote',
+          data: { text: node.content[0].content[0].text }
+        };
+      }
+      return null;
+    }).filter(Boolean);
+  };
+
+  const handleEditorChange = (json) => {
+    setTiptapContent(json);
+    // Also update plain text content for search/read time
+    // This is a simplified extraction
+    const plainText = JSON.stringify(json);
+    setFormData(prev => ({ ...prev, content: plainText }));
+  };
+
+  const handleSubmit = async (isDraft = false) => {
     if (!formData.title.trim()) {
-      showAlert('error', 'Please enter a title for your story');
-      return false;
+      showAlert('error', 'Title is required');
+      return;
     }
-
-    if (formData.title.length < 5) {
-      showAlert('error', 'Title should be at least 5 characters long');
-      return false;
+    if (!tiptapContent) {
+      showAlert('error', 'Content is required');
+      return;
     }
-
-    if (!formData.content.trim()) {
-      showAlert('error', 'Please write some content for your story');
-      return false;
-    }
-
-    if (wordCount < 50) {
-      showAlert('error', 'Your story should be at least 50 words long');
-      return false;
-    }
-
-    if (formData.categories.length === 0) {
-      showAlert('error', 'Please select at least one category');
-      return false;
-    }
-
-    return true;
-  };
-
-  const handleSaveDraft = async () => {
-    if (!validateForm()) return;
 
     try {
       setLoading(true);
-      const draftData = { ...formData, isPublished: false };
-      await api.post('/drafts', draftData);
-      showAlert('success', 'Draft saved successfully!');
-    } catch (error) {
-      console.error('Save draft failed:', error);
-      showAlert('error', 'Failed to save draft. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
+      const blocks = transformContent(tiptapContent);
 
-  const handlePublish = async () => {
-    if (!validateForm()) return;
+      // Extract plain text properly for the backend 'content' field (used for search/excerpt)
+      // We can use the blocks we just created
+      const plainText = blocks.map(b => {
+        if (b.type === 'paragraph' || b.type === 'heading' || b.type === 'quote') return b.data.text;
+        if (b.type === 'list') return b.data.items.join(' ');
+        return '';
+      }).join('\n');
 
-    try {
-      setLoading(true);
-      const response = await api.post('/blogs', formData);
-      
-      if (response.data.success) {
-        showAlert('success', 'Your story has been published successfully!');
+      const payload = {
+        ...formData,
+        content: plainText,
+        contentBlocks: blocks,
+        isPublished: !isDraft
+      };
+
+      const endpoint = isDraft ? '/drafts' : '/blogs';
+      const res = await api.post(endpoint, payload);
+
+      if (res.data.success) {
+        showAlert('success', isDraft ? 'Draft saved!' : 'Story published!');
         setTimeout(() => {
-          navigate(`/blogs/${response.data.blog._id}`);
-        }, 2000);
+          navigate(isDraft ? '/drafts' : `/blogs/${res.data.blog._id || res.data.draft._id}`);
+        }, 1500);
       }
     } catch (error) {
-      console.error('Publish failed:', error);
-      showAlert('error', 'Failed to publish story. Please try again.');
+      console.error('Submit error:', error);
+      showAlert('error', 'Failed to save story.');
     } finally {
       setLoading(false);
     }
   };
 
-  if (!token) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <Type className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Sign In Required</h2>
-          <p className="text-gray-600 mb-6">Please sign in to create a story</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Alert */}
+    <div className="min-h-screen bg-gray-50 pt-20 pb-20">
       {alert.show && (
-        <div className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg border-l-4 ${
-          alert.type === 'success' 
-            ? 'bg-green-50 border-green-400 text-green-700' 
-            : 'bg-red-50 border-red-400 text-red-700'
-        }`}>
-          <div className="flex items-center space-x-2">
-            {alert.type === 'success' ? (
-              <CheckCircle2 className="h-5 w-5" />
-            ) : (
-              <AlertCircle className="h-5 w-5" />
-            )}
+        <div className={`fixed top-24 right-4 z-50 p-4 rounded-lg shadow-lg border-l-4 animate-slide-down ${alert.type === 'success' ? 'bg-green-50 border-green-500 text-green-700' : 'bg-red-50 border-red-500 text-red-700'
+          }`}>
+          <div className="flex items-center gap-2">
+            {alert.type === 'success' ? <CheckCircle2 size={20} /> : <AlertCircle size={20} />}
             <span className="font-medium">{alert.message}</span>
           </div>
         </div>
       )}
 
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Create New Story</h1>
-          <p className="text-gray-600">Share your thoughts, ideas, and stories with the world</p>
+      <div className="max-w-5xl mx-auto px-4">
+        <div className="flex items-center justify-between mb-8">
+          <h1 className="text-3xl font-display font-bold text-gray-900">Write a Story</h1>
+          <div className="flex gap-3">
+            <button
+              onClick={() => handleSubmit(true)}
+              disabled={loading}
+              className="px-4 py-2 text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 font-medium transition-colors disabled:opacity-50"
+            >
+              Save Draft
+            </button>
+            <button
+              onClick={() => handleSubmit(false)}
+              disabled={loading}
+              className="px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-medium transition-colors shadow-sm disabled:opacity-50 flex items-center gap-2"
+            >
+              {loading ? 'Publishing...' : 'Publish'} <Eye size={18} />
+            </button>
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-          {/* Main Content */}
-          <div className="lg:col-span-3 space-y-6">
-            {/* Title Input */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <label className="block text-sm font-medium text-gray-700 mb-3">
-                Story Title
-              </label>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Main Editor */}
+          <div className="lg:col-span-2 space-y-6">
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
               <input
                 type="text"
                 value={formData.title}
                 onChange={(e) => handleInputChange('title', e.target.value)}
-                placeholder="Write a compelling title that captures attention..."
-                className="w-full px-4 py-3 text-lg font-medium border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                maxLength={200}
+                placeholder="Title"
+                className="w-full text-4xl font-display font-bold placeholder-gray-300 border-none focus:ring-0 p-0 text-gray-900"
               />
-              <div className="flex items-center justify-between mt-2 text-sm text-gray-500">
-                <span>This appears in feeds and search results</span>
-                <span>{formData.title.length}/200</span>
-              </div>
             </div>
 
-            {/* Content Editor */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-              <div className="border-b border-gray-200">
-                <div className="flex">
-                  <button
-                    onClick={() => setPreviewMode(false)}
-                    className={`px-6 py-4 font-medium text-sm border-b-2 transition-colors ${
-                      !previewMode 
-                        ? 'border-primary-500 text-primary-600' 
-                        : 'border-transparent text-gray-500 hover:text-gray-700'
-                    }`}
-                  >
-                    Write
-                  </button>
-                  <button
-                    onClick={() => setPreviewMode(true)}
-                    className={`px-6 py-4 font-medium text-sm border-b-2 transition-colors ${
-                      previewMode 
-                        ? 'border-primary-500 text-primary-600' 
-                        : 'border-transparent text-gray-500 hover:text-gray-700'
-                    }`}
-                  >
-                    Preview
-                  </button>
-                </div>
-              </div>
-
-              <div className="p-6">
-                {!previewMode ? (
-                  <textarea
-                    value={formData.content}
-                    onChange={(e) => handleInputChange('content', e.target.value)}
-                    placeholder="Start writing your story... Share your thoughts, ideas, and experiences. You can use markdown for formatting."
-                    rows={20}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none font-sans text-gray-700 leading-relaxed"
-                  />
-                ) : (
-                  <div className="prose prose-lg max-w-none min-h-[400px] p-4 border border-gray-200 rounded-lg">
-                    {formData.content ? (
-                      <div className="whitespace-pre-wrap">{formData.content}</div>
-                    ) : (
-                      <p className="text-gray-400 text-center py-20">Start writing to see preview...</p>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Writing Stats */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="grid grid-cols-3 gap-4 text-center">
-                <div>
-                  <div className="text-2xl font-bold text-primary-600">{wordCount}</div>
-                  <div className="text-sm text-gray-600">Words</div>
-                </div>
-                <div>
-                  <div className="text-2xl font-bold text-primary-600">{readTime}</div>
-                  <div className="text-sm text-gray-600">Minutes Read</div>
-                </div>
-                <div>
-                  <div className="text-2xl font-bold text-primary-600">{formData.content.length}</div>
-                  <div className="text-sm text-gray-600">Characters</div>
-                </div>
-              </div>
-            </div>
+            <RichTextEditor
+              content={tiptapContent}
+              onChange={handleEditorChange}
+            />
           </div>
 
           {/* Sidebar */}
           <div className="space-y-6">
             {/* Cover Image */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <label className="block text-sm font-medium text-gray-700 mb-3">
-                Cover Image
-              </label>
-              
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+              <h3 className="font-semibold text-gray-900 mb-4">Cover Image</h3>
               {formData.coverImage ? (
-                <div className="relative group">
-                  <img 
-                    src={formData.coverImage} 
-                    alt="Cover preview" 
-                    className="w-full h-48 object-cover rounded-lg"
-                  />
+                <div className="relative group rounded-xl overflow-hidden aspect-video">
+                  <img src={formData.coverImage} alt="Cover" className="w-full h-full object-cover" />
                   <button
-                    onClick={() => handleInputChange('coverImage', '')}
-                    className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={() => setFormData(prev => ({ ...prev, coverImage: '', coverUpload: null }))}
+                    className="absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
                   >
-                    <X className="h-4 w-4" />
+                    <X size={16} />
                   </button>
                 </div>
               ) : (
-                <label className="block cursor-pointer">
-                  <div className="border-2 border-dashed border-gray-300 rounded-lg h-48 flex flex-col items-center justify-center text-gray-400 hover:border-primary-400 hover:text-primary-400 transition-colors">
-                    <Upload className="h-8 w-8 mb-2" />
-                    <span className="text-sm font-medium">Upload Cover Image</span>
-                    <span className="text-xs mt-1">Recommended: 1200×600px</span>
+                <label className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-gray-200 rounded-xl cursor-pointer hover:border-primary-500 hover:bg-primary-50/50 transition-all group">
+                  <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                    <div className="p-3 bg-gray-100 rounded-full group-hover:bg-white transition-colors mb-3">
+                      <ImageIcon className="w-6 h-6 text-gray-400 group-hover:text-primary-500" />
+                    </div>
+                    <p className="text-sm text-gray-500 group-hover:text-primary-600 font-medium">Click to upload cover</p>
                   </div>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageUpload}
-                    className="hidden"
-                  />
+                  <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
                 </label>
               )}
             </div>
 
             {/* Categories */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <label className="block text-sm font-medium text-gray-700 mb-3">
-                Categories
-              </label>
-              <div className="space-y-2 max-h-60 overflow-y-auto">
-                {categoriesList.map(category => (
-                  <label key={category} className="flex items-center space-x-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={formData.categories.includes(category)}
-                      onChange={() => handleCategoryToggle(category)}
-                      className="rounded border-gray-300 text-primary-500 focus:ring-primary-400"
-                    />
-                    <span className="text-sm text-gray-700">{category}</span>
-                  </label>
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+              <h3 className="font-semibold text-gray-900 mb-4">Categories</h3>
+              <div className="flex flex-wrap gap-2">
+                {categoriesList.map(cat => (
+                  <button
+                    key={cat}
+                    onClick={() => handleCategoryToggle(cat)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${formData.categories.includes(cat)
+                        ? 'bg-primary-600 text-white shadow-md shadow-primary-600/20'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                  >
+                    {cat}
+                  </button>
                 ))}
               </div>
             </div>
 
             {/* Tags */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <label className="block text-sm font-medium text-gray-700 mb-3">
-                Tags
-              </label>
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+              <h3 className="font-semibold text-gray-900 mb-4">Tags</h3>
               <div className="flex flex-wrap gap-2 mb-3">
                 {formData.tags.map(tag => (
-                  <span 
-                    key={tag} 
-                    className="inline-flex items-center px-3 py-1 bg-primary-100 text-primary-700 rounded-full text-sm"
-                  >
-                    {tag}
-                    <button
-                      onClick={() => removeTag(tag)}
-                      className="ml-2 hover:text-primary-900"
-                    >
-                      <X className="h-3 w-3" />
+                  <span key={tag} className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-gray-100 text-gray-700">
+                    #{tag}
+                    <button onClick={() => removeTag(tag)} className="ml-1.5 hover:text-red-500">
+                      <X size={12} />
                     </button>
                   </span>
                 ))}
               </div>
               <input
                 type="text"
-                placeholder="Type a tag and press Enter"
+                placeholder="Add a tag..."
                 onKeyDown={handleTagAdd}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all"
               />
-            </div>
-
-            {/* Action Buttons */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="space-y-3">
-                <button
-                  onClick={handleSaveDraft}
-                  disabled={loading}
-                  className="w-full flex items-center justify-center space-x-2 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  <Save className="h-4 w-4" />
-                  <span>Save Draft</span>
-                </button>
-                
-                <button
-                  onClick={handlePublish}
-                  disabled={loading}
-                  className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-primary-500 text-white rounded-lg font-medium hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  <Eye className="h-4 w-4" />
-                  <span>{loading ? 'Publishing...' : 'Publish Story'}</span>
-                </button>
-              </div>
-
-              {/* Quick Stats */}
-              <div className="mt-4 pt-4 border-t border-gray-200">
-                <div className="flex items-center justify-between text-sm text-gray-600">
-                  <div className="flex items-center space-x-1">
-                    <Type className="h-4 w-4" />
-                    <span>{wordCount} words</span>
-                  </div>
-                  <div className="flex items-center space-x-1">
-                    <Clock className="h-4 w-4" />
-                    <span>{readTime} min read</span>
-                  </div>
-                </div>
-              </div>
             </div>
           </div>
         </div>

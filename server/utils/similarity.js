@@ -9,10 +9,10 @@
 
 function tokenize(text = '') {
     return text
-    .toLowerCase()
-    .replace(/[\W_]+/g, ' ')
-    .split(/\s+/)
-    .filter(w => w.length > 2);
+        .toLowerCase()
+        .replace(/[\W_]+/g, ' ')
+        .split(/\s+/)
+        .filter(w => w.length > 2);
 }
 
 // Build vocabulary and document-term counts
@@ -23,15 +23,16 @@ function buildVocabAndDocs(docs, maxVocab = 2000) {
         const counts = {};
         tokens.forEach(t => {
             counts[t] = (counts[t] || 0) + 1;
+            termCounts[t] = (termCounts[t] || 0) + 1; // Fix: Populate global termCounts
         });
         return { tokens, counts, length: tokens.length };
     });
 
     //keep most frequent terms to limit vocab size
     const vocab = Object.entries(termCounts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, maxVocab)
-    .map((term) => term);
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, maxVocab)
+        .map((term) => term[0]); // Fix: Extract just the term string
 
     //document frequency for idf
     const df = {};
@@ -48,14 +49,14 @@ function computeTfidfVector(docToken, vocab, df, N) {
     for (let i = 0; i < vocab.length; i++) {
         const term = vocab[i];
         const tf = (docToken.counts[term] || 0) / (docToken.length || 1);
-        const idf = tf * idf;
-        
+        const idf = Math.log(N / (df[term] || 1)); // Fix: Calculate IDF correctly
+        vec[i] = tf * idf; // Fix: Assign to vector
     }
     return vec;
 }
 
 function cosineSimilarity(a, b) {
-    let dot = 0; na = 0, nb = 0;
+    let dot = 0, na = 0, nb = 0; // Fix: Syntax error
     for (let i = 0; i < a.length; i++) {
         dot += a[i] * b[i];
         na += a[i] * a[i];
@@ -76,7 +77,7 @@ export async function getTopSimilar(docs = [], topN = 6) {
 
 
     //build vocab & doc tokens
-    const { vocab, docTokens, df } = buildVocabAndDocs(docs.map(d => ({ text: d.text})));
+    const { vocab, docTokens, df } = buildVocabAndDocs(docs.map(d => ({ text: d.text })));
     const N = docs.length;
 
     //compute vectors
@@ -97,7 +98,7 @@ export async function getTopSimilar(docs = [], topN = 6) {
 
     // Sort  by similarity desc, return topN items
     similarities.sort((a, b) => b.sim - a.sim);
-    const top = similarities.slice(0, topN).map(s => ({ ...s.doc, similarity: s.sim}));
+    const top = similarities.slice(0, topN).map(s => ({ ...s.doc, similarity: s.sim }));
     return top;
 
 };

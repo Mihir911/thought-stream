@@ -1,0 +1,15 @@
+{
+  "name": "blogging-platform",
+  "version": "1.0.0",
+  "description": "A full-stack blogging application built with the MERN (MongoDB, Express.js, React, Node.js) stack.",
+  "main": "index.js",
+  "scripts": {
+    "dev": "concurrently \"npm run dev --prefix client\" \"npm run dev --prefix server\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

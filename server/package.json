@@ -19,6 +19,7 @@
     "mimetype": "^0.0.8",
     "mongoose": "^7.0.0",
     "multer": "^2.0.2",
+    "nodemailer": "^7.0.10",
     "sharp": "^0.34.5"
   }
 }

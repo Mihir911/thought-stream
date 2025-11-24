@@ -1,261 +1,234 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Grid, BookOpen, Users, TrendingUp, Search } from 'lucide-react';
-import api from '../utils/api';
+import {
+  Search, ArrowRight, Cpu, Code, Palette, Coffee, Plane,
+  Utensils, Heart, Briefcase, GraduationCap, FlaskConical,
+  TrendingUp, Film, Trophy, Music, Brush, Sparkles
+} from 'lucide-react';
 
 const Categories = () => {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
 
-  useEffect(() => {
-    const fetchCategoriesData = async () => {
-      try {
-        setLoading(true);
-        
-        // Get some blogs to extract popular categories
-        const response = await api.get('/blogs?limit=50');
-        const blogs = response.data.blogs || [];
-        
-        // Extract and count categories
-        const categoryCounts = {};
-        blogs.forEach(blog => {
-          blog.categories?.forEach(category => {
-            categoryCounts[category] = (categoryCounts[category] || 0) + 1;
-          });
-        });
-
-        // Create category objects with counts
-        const categoryData = Object.entries(categoryCounts)
-          .map(([name, count]) => ({
-            name,
-            count,
-            // Mock trending status (you can replace with actual trending logic)
-            trending: count > 5
-          }))
-          .sort((a, b) => b.count - a.count);
-
-        setCategories(categoryData);
-      } catch (error) {
-        console.error('Failed to fetch categories:', error);
-        // Fallback to default categories
-        setCategories(getDefaultCategories());
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchCategoriesData();
-  }, []);
-
-  const getDefaultCategories = () => {
-    const defaultCats = [
-      'Technology', 'Programming', 'Design', 'Lifestyle', 'Travel',
-      'Food', 'Health', 'Business', 'Education', 'Science',
-      'Finance', 'Entertainment', 'Sports', 'Art', 'Music'
-    ];
-    
-    return defaultCats.map(name => ({
-      name,
-      count: Math.floor(Math.random() * 50) + 10,
-      trending: Math.random() > 0.7
-    }));
+  // Enhanced metadata with specific icons and gradients
+  const categoryMeta = {
+    'Technology': {
+      icon: Cpu,
+      color: 'text-blue-600',
+      bg: 'bg-blue-50',
+      gradient: 'from-blue-500 to-cyan-500',
+      desc: 'The latest in tech and innovation.'
+    },
+    'Programming': {
+      icon: Code,
+      color: 'text-indigo-600',
+      bg: 'bg-indigo-50',
+      gradient: 'from-indigo-500 to-purple-500',
+      desc: 'Coding tips, tutorials, and best practices.'
+    },
+    'Design': {
+      icon: Palette,
+      color: 'text-pink-600',
+      bg: 'bg-pink-50',
+      gradient: 'from-pink-500 to-rose-500',
+      desc: 'UI/UX, graphic design, and creative inspiration.'
+    },
+    'Lifestyle': {
+      icon: Coffee,
+      color: 'text-amber-600',
+      bg: 'bg-amber-50',
+      gradient: 'from-amber-500 to-orange-500',
+      desc: 'Living your best life, every day.'
+    },
+    'Travel': {
+      icon: Plane,
+      color: 'text-sky-600',
+      bg: 'bg-sky-50',
+      gradient: 'from-sky-500 to-blue-500',
+      desc: 'Explore the world with us.'
+    },
+    'Food': {
+      icon: Utensils,
+      color: 'text-red-600',
+      bg: 'bg-red-50',
+      gradient: 'from-red-500 to-orange-500',
+      desc: 'Delicious recipes and culinary adventures.'
+    },
+    'Health': {
+      icon: Heart,
+      color: 'text-emerald-600',
+      bg: 'bg-emerald-50',
+      gradient: 'from-emerald-500 to-teal-500',
+      desc: 'Wellness, fitness, and mental health.'
+    },
+    'Business': {
+      icon: Briefcase,
+      color: 'text-slate-600',
+      bg: 'bg-slate-50',
+      gradient: 'from-slate-500 to-gray-500',
+      desc: 'Entrepreneurship, startups, and career advice.'
+    },
+    'Education': {
+      icon: GraduationCap,
+      color: 'text-violet-600',
+      bg: 'bg-violet-50',
+      gradient: 'from-violet-500 to-purple-500',
+      desc: 'Learning resources and academic insights.'
+    },
+    'Science': {
+      icon: FlaskConical,
+      color: 'text-teal-600',
+      bg: 'bg-teal-50',
+      gradient: 'from-teal-500 to-emerald-500',
+      desc: 'Discoveries that change our understanding.'
+    },
+    'Finance': {
+      icon: TrendingUp,
+      color: 'text-green-600',
+      bg: 'bg-green-50',
+      gradient: 'from-green-500 to-emerald-500',
+      desc: 'Money management and investment strategies.'
+    },
+    'Entertainment': {
+      icon: Film,
+      color: 'text-fuchsia-600',
+      bg: 'bg-fuchsia-50',
+      gradient: 'from-fuchsia-500 to-pink-500',
+      desc: 'Movies, music, and pop culture.'
+    },
+    'Sports': {
+      icon: Trophy,
+      color: 'text-orange-600',
+      bg: 'bg-orange-50',
+      gradient: 'from-orange-500 to-red-500',
+      desc: 'News, analysis, and highlights.'
+    },
+    'Art': {
+      icon: Brush,
+      color: 'text-rose-600',
+      bg: 'bg-rose-50',
+      gradient: 'from-rose-500 to-pink-500',
+      desc: 'Creative expression in all forms.'
+    },
+    'Music': {
+      icon: Music,
+      color: 'text-cyan-600',
+      bg: 'bg-cyan-50',
+      gradient: 'from-cyan-500 to-blue-500',
+      desc: 'Rhythms, beats, and melodies.'
+    }
   };
 
-  const filteredCategories = categories.filter(category =>
-    category.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  useEffect(() => {
+    setCategories(Object.keys(categoryMeta));
+    setLoading(false);
+  }, []);
 
-  const popularCategories = categories
-    .filter(cat => cat.trending)
-    .slice(0, 6);
-
-  const CategoryCard = ({ category, showCount = true }) => (
-    <Link
-      to={`/categories/${category.name}`}
-      className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-all duration-300 group hover:border-primary-200"
-    >
-      <div className="flex items-center justify-between mb-4">
-        <div className="w-12 h-12 bg-gradient-to-br from-primary-500 to-blue-600 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
-          <span className="text-white font-bold text-lg">
-            {category.name[0].toUpperCase()}
-          </span>
-        </div>
-        {category.trending && (
-          <div className="flex items-center space-x-1 px-2 py-1 bg-orange-100 text-orange-700 rounded-full text-xs font-medium">
-            <TrendingUp className="h-3 w-3" />
-            <span>Trending</span>
-          </div>
-        )}
-      </div>
-
-      <h3 className="text-lg font-semibold text-gray-900 mb-2 group-hover:text-primary-600 transition-colors">
-        {category.name}
-      </h3>
-      
-      {showCount && (
-        <div className="flex items-center space-x-4 text-sm text-gray-500">
-          <div className="flex items-center space-x-1">
-            <BookOpen className="h-4 w-4" />
-            <span>{category.count} stories</span>
-          </div>
-          <div className="flex items-center space-x-1">
-            <Users className="h-4 w-4" />
-            <span>{Math.floor(category.count * 2.5)} readers</span>
-          </div>
-        </div>
-      )}
-    </Link>
-  );
-
-  const LoadingSkeleton = () => (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 animate-pulse">
-      <div className="flex justify-between mb-4">
-        <div className="w-12 h-12 bg-gray-200 rounded-lg"></div>
-        <div className="w-16 h-6 bg-gray-200 rounded-full"></div>
-      </div>
-      <div className="h-6 bg-gray-200 rounded mb-2"></div>
-      <div className="flex space-x-4">
-        <div className="w-20 h-4 bg-gray-200 rounded"></div>
-        <div className="w-16 h-4 bg-gray-200 rounded"></div>
-      </div>
-    </div>
+  const filteredCategories = categories.filter(cat =>
+    cat.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
-        <div className="text-center mb-12">
-          <div className="flex items-center justify-center space-x-3 mb-4">
-            <div className="p-3 bg-primary-100 rounded-xl">
-              <Grid className="h-6 w-6 text-primary-600" />
-            </div>
-            <h1 className="text-4xl font-bold text-gray-900">Explore Categories</h1>
+    <div className="min-h-screen bg-gray-50/50 pt-24 pb-16">
+      <div className="max-w-7xl mx-auto px-4 lg:px-8">
+
+        {/* Header Section */}
+        <div className="text-center max-w-3xl mx-auto mb-20">
+          <div className="inline-flex items-center justify-center p-2 bg-white rounded-full shadow-sm mb-8 border border-gray-100">
+            <span className="px-3 py-1 bg-gray-900 text-white rounded-full text-xs font-bold uppercase tracking-wider">
+              Discover
+            </span>
+            <span className="px-3 text-sm font-medium text-gray-600">
+              Explore by topic
+            </span>
           </div>
-          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            Discover stories organized by topics that matter to you. 
-            Find your next favorite read in any category.
+
+          <h1 className="text-5xl md:text-6xl font-display font-bold text-gray-900 mb-6 tracking-tight">
+            Find your next <br />
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 via-purple-600 to-cyan-600">
+              favorite story
+            </span>
+          </h1>
+
+          <p className="text-xl text-gray-500 mb-10 leading-relaxed">
+            Browse through our curated collection of categories. From technology to travel, find the content that speaks to you.
           </p>
-        </div>
 
-        {/* Search Bar */}
-        <div className="max-w-2xl mx-auto mb-12">
-          <div className="relative">
-            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-            <input
-              type="text"
-              placeholder="Search categories..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-12 pr-4 py-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent text-lg shadow-sm"
-            />
+          <div className="relative max-w-lg mx-auto group">
+            <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-cyan-500 rounded-2xl opacity-20 group-hover:opacity-40 blur transition duration-500"></div>
+            <div className="relative bg-white rounded-2xl shadow-xl">
+              <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-indigo-500 transition-colors" size={22} />
+              <input
+                type="text"
+                placeholder="Search for a topic..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-14 pr-6 py-4 bg-transparent border-none outline-none text-lg text-gray-900 placeholder-gray-400 rounded-2xl"
+              />
+            </div>
           </div>
         </div>
 
-        {/* Popular Categories */}
-        {popularCategories.length > 0 && (
-          <section className="mb-16">
-            <div className="flex items-center justify-between mb-8">
-              <h2 className="text-2xl font-bold text-gray-900">Popular Categories</h2>
-              <div className="flex items-center space-x-2 text-primary-600">
-                <TrendingUp className="h-5 w-5" />
-                <span className="font-medium">Most active communities</span>
-              </div>
-            </div>
+        {/* Categories Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredCategories.map((cat) => {
+            const meta = categoryMeta[cat] || {
+              icon: Sparkles,
+              color: 'text-gray-600',
+              bg: 'bg-gray-50',
+              gradient: 'from-gray-500 to-slate-500',
+              desc: 'Explore this topic.'
+            };
+            const Icon = meta.icon;
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {popularCategories.map(category => (
-                <CategoryCard key={category.name} category={category} />
-              ))}
+            return (
+              <Link
+                key={cat}
+                to={`/category/${cat}`}
+                className="group relative bg-white rounded-3xl p-1 overflow-hidden hover:shadow-2xl hover:-translate-y-1 transition-all duration-300"
+              >
+                <div className="absolute inset-0 bg-gradient-to-br from-gray-50 to-white opacity-50" />
+
+                <div className="relative h-full bg-white rounded-[20px] p-6 flex flex-col border border-gray-100 group-hover:border-transparent transition-colors">
+                  {/* Icon Header */}
+                  <div className="flex justify-between items-start mb-6">
+                    <div className={`p-3.5 rounded-2xl ${meta.bg} ${meta.color} group-hover:scale-110 transition-transform duration-300`}>
+                      <Icon size={28} strokeWidth={2} />
+                    </div>
+                    <div className="p-2 rounded-full bg-gray-50 group-hover:bg-gray-900 group-hover:text-white transition-colors duration-300">
+                      <ArrowRight size={18} className="-rotate-45 group-hover:rotate-0 transition-transform duration-300" />
+                    </div>
+                  </div>
+
+                  {/* Content */}
+                  <div>
+                    <h3 className="text-2xl font-bold text-gray-900 mb-2 font-display group-hover:text-transparent group-hover:bg-clip-text group-hover:bg-gradient-to-r group-hover:from-gray-900 group-hover:to-gray-600 transition-all">
+                      {cat}
+                    </h3>
+                    <p className="text-gray-500 font-medium leading-relaxed">
+                      {meta.desc}
+                    </p>
+                  </div>
+
+                  {/* Hover Gradient Line */}
+                  <div className={`absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r ${meta.gradient} transform scale-x-0 group-hover:scale-x-100 transition-transform duration-500 origin-left`} />
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+
+        {filteredCategories.length === 0 && (
+          <div className="text-center py-20">
+            <div className="inline-flex items-center justify-center p-4 bg-gray-100 rounded-full mb-4">
+              <Search size={32} className="text-gray-400" />
             </div>
-          </section>
+            <h3 className="text-xl font-bold text-gray-900 mb-2">No categories found</h3>
+            <p className="text-gray-500">We couldn't find any topics matching "{searchTerm}"</p>
+          </div>
         )}
 
-        {/* All Categories */}
-        <section>
-          <div className="flex items-center justify-between mb-8">
-            <h2 className="text-2xl font-bold text-gray-900">
-              All Categories
-              {searchTerm && (
-                <span className="text-lg font-normal text-gray-600 ml-2">
-                  ({filteredCategories.length} results)
-                </span>
-              )}
-            </h2>
-          </div>
-
-          {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {[...Array(12)].map((_, index) => (
-                <LoadingSkeleton key={index} />
-              ))}
-            </div>
-          ) : filteredCategories.length === 0 ? (
-            <div className="text-center py-12">
-              <Grid className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">No categories found</h3>
-              <p className="text-gray-600 mb-6">
-                {searchTerm ? `No categories matching "${searchTerm}"` : 'No categories available at the moment'}
-              </p>
-              {searchTerm && (
-                <button
-                  onClick={() => setSearchTerm('')}
-                  className="bg-primary-500 text-white px-6 py-3 rounded-lg font-semibold hover:bg-primary-600 transition-colors"
-                >
-                  Clear Search
-                </button>
-              )}
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {filteredCategories.map(category => (
-                <CategoryCard key={category.name} category={category} />
-              ))}
-            </div>
-          )}
-        </section>
-
-        {/* Category Stats */}
-        <div className="mt-16 bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
-            <div>
-              <div className="text-3xl font-bold text-primary-600 mb-2">
-                {categories.length}+
-              </div>
-              <div className="text-gray-600">Categories</div>
-            </div>
-            <div>
-              <div className="text-3xl font-bold text-primary-600 mb-2">
-                {categories.reduce((sum, cat) => sum + cat.count, 0).toLocaleString()}+
-              </div>
-              <div className="text-gray-600">Total Stories</div>
-            </div>
-            <div>
-              <div className="text-3xl font-bold text-primary-600 mb-2">
-                {Math.floor(categories.reduce((sum, cat) => sum + cat.count, 0) * 2.5).toLocaleString()}+
-              </div>
-              <div className="text-gray-600">Active Readers</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Call to Action */}
-        <div className="text-center mt-16">
-          <div className="bg-gradient-to-r from-primary-500 to-blue-600 rounded-2xl p-8 text-white">
-            <h3 className="text-2xl font-bold mb-4">Can't find your category?</h3>
-            <p className="text-primary-100 mb-6 max-w-2xl mx-auto">
-              Start writing about topics you're passionate about and help grow our community. 
-              Your stories might just create a new trending category!
-            </p>
-            <Link
-              to="/create"
-              className="bg-white text-primary-600 px-8 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors inline-block"
-            >
-              Start Writing
-            </Link>
-          </div>
-        </div>
       </div>
     </div>
   );

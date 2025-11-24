@@ -1,222 +1,120 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useSelector } from 'react-redux';
-import { Search, ArrowRight, Users, PenTool, TrendingUp, BookOpen } from 'lucide-react';
+import { ArrowRight, Sparkles, TrendingUp } from 'lucide-react';
 import api from '../utils/api';
+import BlogCard from '../components/blog/BlogCard';
 
 const Landing = () => {
-  const { token } = useSelector((state) => state.auth);
-  const [featuredBlogs, setFeaturedBlogs] = useState([]);
+  const [trending, setTrending] = useState([]);
+  const [latest, setLatest] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchFeaturedBlogs = async () => {
+    const fetchData = async () => {
       try {
-        const response = await api.get('/blogs?limit=6&sortBy=createdAt&sortOrder=desc');
-        setFeaturedBlogs(response.data.blogs || []);
+        const [trendingRes, latestRes] = await Promise.all([
+          api.get('/blogs/feed/trending?limit=3'),
+          api.get('/blogs?limit=6')
+        ]);
+        setTrending(trendingRes.data.blogs || []);
+        setLatest(latestRes.data.blogs || []);
       } catch (error) {
-        console.error('Failed to fetch featured blogs:', error);
+        console.error('Error fetching landing data:', error);
       } finally {
         setLoading(false);
       }
     };
-
-    fetchFeaturedBlogs();
+    fetchData();
   }, []);
 
-  const features = [
-    {
-      icon: PenTool,
-      title: 'Beautiful Editor',
-      description: 'Write in our distraction-free editor with real-time preview and auto-save.'
-    },
-    {
-      icon: TrendingUp,
-      title: 'Grow Your Audience',
-      description: 'Reach readers who care about your topics and build your writing career.'
-    },
-    {
-      icon: BookOpen,
-      title: 'Personalized Feed',
-      description: 'Discover content tailored to your interests and reading habits.'
-    },
-    {
-      icon: Users,
-      title: 'Engage with Community',
-      description: 'Connect with fellow writers and readers through comments and reactions.'
-    }
-  ];
-
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-gray-50 pt-16">
       {/* Hero Section */}
-      <section className="relative bg-gradient-to-br from-gray-50 to-primary-50 py-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center">
-            <h1 className="text-4xl md:text-6xl font-bold text-gray-900 mb-6">
-              Write Your
-              <span className="text-primary-600"> Story</span>
+      <section className="relative bg-white border-b border-gray-200 overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-primary-50 to-secondary-50 opacity-50" />
+        <div className="max-w-7xl mx-auto px-4 lg:px-8 py-20 relative z-10">
+          <div className="max-w-3xl">
+            <h1 className="text-5xl md:text-7xl font-display font-bold text-gray-900 tracking-tight mb-6 leading-[1.1]">
+              Discover stories that <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary-600 to-secondary-600">matter.</span>
             </h1>
-            <p className="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
-              A beautiful platform for writers to share their voice and readers to discover amazing stories. 
-              Join thousands of creators building their audience.
+            <p className="text-xl text-gray-600 mb-8 leading-relaxed max-w-2xl">
+              A place for writers, thinkers, and creators to share their ideas with the world.
+              Join our community of curious minds.
             </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-12">
-              {token ? (
-                <Link
-                  to="/create"
-                  className="bg-primary-500 text-white px-8 py-4 rounded-lg font-semibold text-lg hover:bg-primary-600 transition-colors flex items-center gap-2"
-                >
-                  Start Writing
-                  <ArrowRight className="h-5 w-5" />
-                </Link>
-              ) : (
-                <>
-                  <Link
-                    to="/register"
-                    className="bg-primary-500 text-white px-8 py-4 rounded-lg font-semibold text-lg hover:bg-primary-600 transition-colors"
-                  >
-                    Get Started Free
-                  </Link>
-                  <Link
-                    to="/feed"
-                    className="border border-gray-300 text-gray-700 px-8 py-4 rounded-lg font-semibold text-lg hover:bg-gray-50 transition-colors"
-                  >
-                    Explore Stories
-                  </Link>
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* Search Bar */}
-          <div className="max-w-2xl mx-auto">
-            <div className="relative">
-              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-              <input
-                type="text"
-                placeholder="Search for stories, topics, or authors..."
-                className="w-full pl-12 pr-4 py-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent text-lg"
-              />
+            <div className="flex flex-wrap gap-4">
+              <Link
+                to="/register"
+                className="px-8 py-4 bg-gray-900 text-white rounded-full font-medium hover:bg-gray-800 transition-all hover:shadow-lg hover:-translate-y-0.5 flex items-center gap-2"
+              >
+                Start Reading <ArrowRight size={18} />
+              </Link>
+              <Link
+                to="/create"
+                className="px-8 py-4 bg-white text-gray-900 border border-gray-200 rounded-full font-medium hover:bg-gray-50 transition-all hover:border-gray-300"
+              >
+                Write a Story
+              </Link>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Features Section */}
-      <section className="py-20 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
-              Everything You Need to Write
-            </h2>
-            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-              Powerful tools and an engaged community to help you share your best work.
-            </p>
+      {/* Trending Section */}
+      <section className="max-w-7xl mx-auto px-4 lg:px-8 py-16">
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-secondary-100 text-secondary-600 rounded-lg">
+              <TrendingUp size={20} />
+            </div>
+            <h2 className="text-2xl font-display font-bold text-gray-900">Trending Now</h2>
           </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-            {features.map((feature, index) => {
-              const Icon = feature.icon;
-              return (
-                <div key={index} className="text-center p-6">
-                  <div className="w-16 h-16 bg-primary-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Icon className="h-8 w-8 text-primary-600" />
-                  </div>
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                    {feature.title}
-                  </h3>
-                  <p className="text-gray-600">
-                    {feature.description}
-                  </p>
-                </div>
-              );
-            })}
-          </div>
+          <Link to="/trending" className="text-sm font-medium text-gray-500 hover:text-primary-600 transition-colors">
+            View all
+          </Link>
         </div>
+
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="h-[400px] bg-gray-200 rounded-2xl animate-pulse" />
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {trending.map(blog => (
+              <BlogCard key={blog._id} blog={blog} />
+            ))}
+          </div>
+        )}
       </section>
 
-      {/* Featured Stories Section */}
-      <section className="py-20 bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
-              Featured Stories
-            </h2>
-            <p className="text-xl text-gray-600">
-              Discover what the community is reading and writing about
-            </p>
+      {/* Latest Stories */}
+      <section className="bg-white border-t border-gray-200 py-16">
+        <div className="max-w-7xl mx-auto px-4 lg:px-8">
+          <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center gap-2">
+              <div className="p-2 bg-primary-100 text-primary-600 rounded-lg">
+                <Sparkles size={20} />
+              </div>
+              <h2 className="text-2xl font-display font-bold text-gray-900">Latest Stories</h2>
+            </div>
+            <Link to="/feed" className="text-sm font-medium text-gray-500 hover:text-primary-600 transition-colors">
+              View all
+            </Link>
           </div>
 
           {loading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {[...Array(6)].map((_, index) => (
-                <div key={index} className="bg-white rounded-lg shadow-sm p-6 animate-pulse">
-                  <div className="h-6 bg-gray-200 rounded mb-4"></div>
-                  <div className="h-4 bg-gray-200 rounded mb-2"></div>
-                  <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-                </div>
+              {[1, 2, 3, 4, 5, 6].map(i => (
+                <div key={i} className="h-[400px] bg-gray-100 rounded-2xl animate-pulse" />
               ))}
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {featuredBlogs.map((blog) => (
-                <Link
-                  key={blog._id}
-                  to={`/blogs/${blog._id}`}
-                  className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow p-6 group"
-                >
-                  <h3 className="text-xl font-semibold text-gray-900 mb-3 group-hover:text-primary-600 transition-colors">
-                    {blog.title}
-                  </h3>
-                  <p className="text-gray-600 mb-4 line-clamp-3">
-                    {blog.excerpt || 'Read this amazing story...'}
-                  </p>
-                  <div className="flex items-center justify-between text-sm text-gray-500">
-                    <span>{blog.author?.username || 'Anonymous'}</span>
-                    <span>{new Date(blog.createdAt).toLocaleDateString()}</span>
-                  </div>
-                </Link>
+              {latest.map(blog => (
+                <BlogCard key={blog._id} blog={blog} />
               ))}
             </div>
-          )}
-
-          <div className="text-center mt-12">
-            <Link
-              to="/feed"
-              className="inline-flex items-center gap-2 text-primary-600 hover:text-primary-700 font-semibold text-lg"
-            >
-              Explore All Stories
-              <ArrowRight className="h-5 w-5" />
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* CTA Section */}
-      <section className="py-20 bg-primary-600">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-3xl md:text-4xl font-bold text-white mb-6">
-            Ready to Share Your Story?
-          </h2>
-          <p className="text-xl text-primary-100 mb-8">
-            Join thousands of writers who've found their audience on BlogSpace
-          </p>
-          {token ? (
-            <Link
-              to="/create"
-              className="bg-white text-primary-600 px-8 py-4 rounded-lg font-semibold text-lg hover:bg-gray-100 transition-colors inline-flex items-center gap-2"
-            >
-              Write Your First Story
-              <ArrowRight className="h-5 w-5" />
-            </Link>
-          ) : (
-            <Link
-              to="/register"
-              className="bg-white text-primary-600 px-8 py-4 rounded-lg font-semibold text-lg hover:bg-gray-100 transition-colors"
-            >
-              Start Writing Today
-            </Link>
           )}
         </div>
       </section>

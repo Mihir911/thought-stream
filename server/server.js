@@ -4,7 +4,13 @@ import cors from "cors";
 import dotenv from "dotenv";
 
 //load environment variables
-dotenv.config();
+const result = dotenv.config();
+console.log('Current working directory:', process.cwd());
+if (result.error) {
+    console.log('Error loading .env:', result.error);
+} else {
+    console.log('.env loaded successfully');
+}
 
 const app = express();
 const PORT = process.env.PORT;
@@ -32,9 +38,7 @@ import blogRoutes from './routes/blogRoutes.js';
 import path from 'path';
 import uploadRoutes from './routes/uploadRoutes.js';
 import draftRoutes from './routes/draftRoutes.js';
-
-
-
+import searchRoutes from './routes/searchRoutes.js';
 
 //serve uploaded files
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
@@ -47,6 +51,7 @@ app.use('/api/blogs', blogRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api/uploads', uploadRoutes);
 app.use('/api/drafts', draftRoutes);
+app.use('/api/search', searchRoutes);
 
 // adtabase connection 
 const connectDB = async () => {
@@ -98,32 +103,17 @@ const startServer = async () => {
 
     });
 
- //new technologia
-    // process.on('SIGTERM', () => {
-    //     console.log('SIGTERM recieved, shutting down gracefully');
-    //     server.close(() => {
-    //         mongoose.connection.close();
-    //         process.exit(0);
-    //     });
-
-    // });
-
-    // new technologia
-    process.on('SIGINT', () => {
-        console.log('SIGINT received, shutting down gracefully');
+    // Graceful shutdown
+    const shutdown = () => {
+        console.log('Shutting down gracefully');
         server.close(() => {
             mongoose.connection.close();
             process.exit(0);
         });
-    });
+    };
 
-    process.on('SIGTERM', () => {
-        console.log('SIGTERM received, shutting down gracefully');
-        server.close(() => {
-            mongoose.connection.close();
-            process.exit(0);
-        });
-    });
+    process.on('SIGINT', shutdown);
+    process.on('SIGTERM', shutdown);
 
 };
 

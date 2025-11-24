@@ -23,6 +23,8 @@ import Bookmarks from './pages/Bookmarks';
 import MyBlogs from './pages/MyBlogs';
 import Drafts from './pages/Drafts';
 import About from './pages/About';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 
 // Loading component
 const LoadingSpinner = () => (
@@ -65,13 +67,16 @@ const AppContent = () => {
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/feed" element={<ForYou />} />
           <Route path="/trending" element={<Trending />} />
           <Route path="/categories" element={<Categories />} />
-          <Route path="/categories/:category" element={<CategoryPage />} />
+          <Route path="/category/:category" element={<CategoryPage />} />
           <Route path="/blogs/:id" element={<BlogDetail />} />
           <Route path="/create" element={<CreateBlog />} />
           <Route path="/profile" element={<Profile />} />
+          <Route path="/user/:id" element={<Profile />} />
           <Route path="/bookmarks" element={<Bookmarks />} />
           <Route path="/my-blogs" element={<MyBlogs />} />
           <Route path="/drafts" element={<Drafts />} />

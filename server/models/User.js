@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+import mongoose, { Schema } from "mongoose";
 import bcrypt from 'bcryptjs';
 
 const userSchema = new mongoose.Schema({
@@ -34,6 +34,18 @@ const userSchema = new mongoose.Schema({
     bio: {
         type: String,
         maxlength: 500,
+        default: ''
+    },
+
+    location: {
+        type: String,
+        maxlength: 100,
+        default: ''
+    },
+
+    website: {
+        type: String,
+        maxlength: 200,
         default: ''
     },
 
@@ -82,6 +94,15 @@ const userSchema = new mongoose.Schema({
     preferences: {
         newsletter: { type: Boolean, default: false },
         digestFrequency: { type: String, enum: ['daily', 'weekly', 'monthly', 'none'], default: 'weekly' }
+    },
+
+    otp: {
+        type: String,
+        select: false
+    },
+    otpExpires: {
+        type: Date,
+        select: false
     }
 }, { timestamps: true });
 
